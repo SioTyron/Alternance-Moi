@@ -8,12 +8,15 @@ Le projet est développé avec **Next.js** et déployé sur **Vercel**, garantis
 
 ---
 
-## ✨ Objectifs
+## 🚀 Fonctionnalités principales
 
-- Faciliter la rédaction des rapports journaliers en alternance  
-- Centraliser les informations dans un tableau de bord personnel  
-- Assurer la confidentialité des données grâce aux **Row Level Security (RLS)**  
-- Offrir une solution moderne et intuitive, accessible depuis n’importe quel appareil  
+- 🔐 **Authentification par email (Magic Link)** via Supabase Auth  
+- 📝 **Création de rapports** avec titre, contenu, ajout de fichier (png,pdf...) et date  
+- 📊 **Consultation des rapports** dans un tableau de bord personnel  
+- 🔒 **Sécurité des données** grâce aux Row Level Security (RLS) de Supabase  
+- ☁️ **Déploiement automatique** sur Vercel
+- ✨ **Toute Plateforme** grâce à un design responsive. Accédez à l'application depuis tout appareil
+
 
 ---
 
