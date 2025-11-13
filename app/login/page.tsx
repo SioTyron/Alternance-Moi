@@ -9,10 +9,14 @@ export default function LoginPage() {
 
   const sendMagicLink = async () => {
     setLoading(true);
+    
+    // Correction : utilisation d'une variable d'environnement avec fallback
+    const redirectUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+    
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { 
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+        emailRedirectTo: `${redirectUrl}/auth/callback`
       }
     });
     setLoading(false);
