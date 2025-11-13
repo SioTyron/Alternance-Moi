@@ -26,6 +26,12 @@ Le projet est développé avec **Next.js** et déployé sur **Vercel**, garantis
 
 ---
 
+## 🌐 Application en ligne
+
+Tu peux tester l'application directement ici :  
+👉 [https://alternance-moi.vercel.app/](https://alternance-moi.vercel.app/)
+
+---
 ## 👨‍💻 Auteur
 
 Développé par **Tyron de Chadirac-Lara**  
