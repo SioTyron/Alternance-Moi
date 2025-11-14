@@ -7,8 +7,11 @@ export default function NewReportPage() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  // CORRECTION : Utiliser toLocaleDateString pour éviter le décalage de fuseau horaire
-  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA')); // Format YYYY-MM-DD
+  // CORRECTION : Utiliser la date locale sans conversion UTC
+  const [date, setDate] = useState(() => {
+    const now = new Date();
+    return now.toISOString().split('T')[0];
+  });
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
 
@@ -60,18 +63,13 @@ export default function NewReportPage() {
     }
 
     try {
-      // CORRECTION : Convertir la date en format ISO sans décalage de temps
-      const dateObj = new Date(date);
-      // Ajouter le décalage de fuseau pour avoir la date exacte
-      const timezoneOffset = dateObj.getTimezoneOffset() * 60000;
-      const correctedDate = new Date(dateObj.getTime() - timezoneOffset);
-      
-      // Créer le rapport
+      // CORRECTION : Envoyer la date directement sans conversion
+      // Le format YYYY-MM-DD est directement compatible avec PostgreSQL date
       const { data: report, error } = await supabase
         .from('reports')
         .insert({
           user_id: session.user.id,
-          date: correctedDate.toISOString().split('T')[0], // Stocker seulement la date
+          date: date, // Utiliser directement la chaîne YYYY-MM-DD
           title,
           content,
         })
@@ -121,7 +119,7 @@ export default function NewReportPage() {
         {/* Form Card */}
         <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
           <form onSubmit={submit} className="space-y-6">
-            {/* Date Field - CORRIGÉ */}
+            {/* Date Field */}
             <div>
               <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
                 Date de l'activité *

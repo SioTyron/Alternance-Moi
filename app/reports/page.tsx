@@ -23,7 +23,21 @@ export default function ReportsPage() {
     fetchReports();
   }, []);
 
+  // CORRECTION : Fonction de formatage de date qui gère le format YYYY-MM-DD
   const formatDate = (dateString: string) => {
+    // Si la date est déjà au format YYYY-MM-DD (stockée en base)
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = dateString.split('-');
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      return date.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+    
+    // Sinon, utiliser l'ancienne méthode pour la rétrocompatibilité
     const date = new Date(dateString);
     return date.toLocaleDateString('fr-FR', {
       weekday: 'long',
@@ -31,6 +45,17 @@ export default function ReportsPage() {
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  // CORRECTION : Fonction pour afficher la date simple (sans les détails)
+  const formatSimpleDate = (dateString: string) => {
+    if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = dateString.split('-');
+      return `${day}/${month}/${year}`;
+    }
+    
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR');
   };
 
   const getFileIcon = (fileName: string) => {
@@ -140,7 +165,7 @@ export default function ReportsPage() {
               </div>
               <div className="bg-purple-50 rounded-lg p-4">
                 <div className="text-2xl font-bold text-purple-600">
-                  {reports.length > 0 ? formatDate(reports[0].date) : 'Aucun'}
+                  {reports.length > 0 ? formatSimpleDate(reports[0].date) : 'Aucun'}
                 </div>
                 <div className="text-sm text-purple-800">Dernier rapport</div>
               </div>
