@@ -7,18 +7,28 @@ export default function NewReportPage() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  // CORRECTION : Utiliser la date locale sans conversion UTC
   const [date, setDate] = useState(() => {
     const now = new Date();
     return now.toISOString().split('T')[0];
   });
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
-      setFiles(prev => [...prev, ...newFiles]);
+      
+      // Vérifier la taille des fichiers
+      const validFiles = newFiles.filter(file => {
+        if (file.size > 10 * 1024 * 1024) { // 10MB
+          alert(`Le fichier ${file.name} est trop volumineux. Taille max: 10MB`);
+          return false;
+        }
+        return true;
+      });
+      
+      setFiles(prev => [...prev, ...validFiles]);
     }
   };
 
@@ -26,10 +36,13 @@ export default function NewReportPage() {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const uploadFile = async (file: File, reportId: string) => {
+  const uploadFile = async (file: File, reportId: string): Promise<any> => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
     const filePath = `${reportId}/${fileName}`;
+
+    // Marquer le fichier comme en cours d'upload
+    setUploadingFiles(prev => new Set(prev).add(file.name));
 
     const { error } = await supabase.storage
       .from('reports')
@@ -37,6 +50,12 @@ export default function NewReportPage() {
 
     if (error) {
       console.error('Error uploading file:', error);
+      // Retirer le fichier de la liste d'upload en cas d'erreur
+      setUploadingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(file.name);
+        return newSet;
+      });
       return null;
     }
 
@@ -44,11 +63,20 @@ export default function NewReportPage() {
       .from('reports')
       .getPublicUrl(filePath);
 
+    // Retirer le fichier de la liste d'upload une fois terminé
+    setUploadingFiles(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(file.name);
+      return newSet;
+    });
+
     return {
       name: file.name,
       url: publicUrl,
       path: filePath,
-      size: file.size
+      size: file.size,
+      type: file.type,
+      uploaded_at: new Date().toISOString()
     };
   };
 
@@ -63,24 +91,24 @@ export default function NewReportPage() {
     }
 
     try {
-      // CORRECTION : Envoyer la date directement sans conversion
-      // Le format YYYY-MM-DD est directement compatible avec PostgreSQL date
+      // Créer le rapport d'abord
       const { data: report, error } = await supabase
         .from('reports')
         .insert({
           user_id: session.user.id,
-          date: date, // Utiliser directement la chaîne YYYY-MM-DD
+          date: date,
           title,
           content,
+          attachments: [] // Initialiser avec un tableau vide
         })
         .select()
         .single();
 
       if (error) throw error;
 
-      // Uploader les fichiers
+      // Uploader les fichiers si présents
+      let uploadedFiles = [];
       if (files.length > 0 && report) {
-        const uploadedFiles = [];
         for (const file of files) {
           const uploadedFile = await uploadFile(file, report.id);
           if (uploadedFile) {
@@ -88,21 +116,96 @@ export default function NewReportPage() {
           }
         }
 
-        // Mettre à jour le rapport avec les fichiers
+        // Mettre à jour le rapport avec les fichiers uploadés
         if (uploadedFiles.length > 0) {
-          await supabase
+          const { error: updateError } = await supabase
             .from('reports')
-            .update({ attachments: uploadedFiles })
+            .update({ 
+              attachments: uploadedFiles,
+              updated_at: new Date().toISOString()
+            })
             .eq('id', report.id);
+
+          if (updateError) throw updateError;
         }
       }
 
       router.push('/reports');
     } catch (error) {
       console.error('Error creating report:', error);
+      alert('Erreur lors de la création du rapport. Veuillez réessayer.');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Fonction pour afficher l'aperçu des images
+  const renderFilePreview = (file: File, index: number) => {
+    const isUploading = uploadingFiles.has(file.name);
+
+    if (file.type.startsWith('image/')) {
+      return (
+        <div className="flex items-center space-x-3">
+          <div className="flex-shrink-0 relative">
+            <img 
+              src={URL.createObjectURL(file)} 
+              alt={file.name}
+              className="h-12 w-12 object-cover rounded-lg"
+            />
+            {isUploading && (
+              <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">
+              {file.name}
+            </p>
+            <p className="text-sm text-gray-500">
+              {(file.size / 1024 / 1024).toFixed(2)} MB
+            </p>
+            {isUploading && (
+              <div className="flex items-center space-x-2 mt-1">
+                <div className="text-xs text-blue-600">Upload en cours...</div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-between w-full">
+        <div className="flex items-center space-x-3">
+          <div className="flex-shrink-0 relative">
+            <div className="h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
+              <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            {isUploading && (
+              <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">
+              {file.name}
+            </p>
+            <p className="text-sm text-gray-500">
+              {(file.size / 1024 / 1024).toFixed(2)} MB
+            </p>
+            {isUploading && (
+              <div className="flex items-center space-x-2 mt-1">
+                <div className="text-xs text-blue-600">Upload en cours...</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -183,18 +286,19 @@ export default function NewReportPage() {
               </p>
             </div>
 
-            {/* File Upload */}
+            {/* File Upload - SECTION AMÉLIORÉE */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Fichiers joints (optionnel)
               </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors duration-200">
                 <input
                   type="file"
                   multiple
                   onChange={handleFileSelect}
                   className="hidden"
                   id="file-upload"
+                  accept=".png,.jpg,.jpeg,.gif,.pdf,.doc,.docx,.txt"
                 />
                 <label
                   htmlFor="file-upload"
@@ -206,30 +310,26 @@ export default function NewReportPage() {
                   Ajouter des fichiers
                 </label>
                 <p className="text-sm text-gray-500 mt-2">
-                  PNG, JPG, PDF, DOCX jusqu'à 10MB
+                  PNG, JPG, GIF, PDF, DOC, DOCX - Maximum 10MB par fichier
                 </p>
               </div>
 
-              {/* File List */}
+              {/* File List - AMÉLIORÉE */}
               {files.length > 0 && (
-                <div className="mt-4 space-y-2">
+                <div className="mt-4 space-y-3">
+                  <h4 className="text-sm font-medium text-gray-700">
+                    Fichiers sélectionnés ({files.length})
+                  </h4>
                   {files.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
-                      <div className="flex items-center">
-                        <svg className="h-5 w-5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <span className="text-sm text-gray-700">{file.name}</span>
-                        <span className="text-xs text-gray-500 ml-2">
-                          ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                        </span>
-                      </div>
+                    <div key={index} className="flex items-center justify-between bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      {renderFilePreview(file, index)}
                       <button
                         type="button"
                         onClick={() => removeFile(index)}
-                        className="text-red-600 hover:text-red-800"
+                        className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-50 transition-colors duration-200"
+                        disabled={uploadingFiles.has(file.name)}
                       >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
@@ -245,6 +345,7 @@ export default function NewReportPage() {
                 type="button"
                 onClick={() => router.back()}
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-3 px-6 rounded-lg transition-all duration-200 text-center"
+                disabled={loading}
               >
                 <div className="flex items-center justify-center">
                   <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -293,6 +394,7 @@ export default function NewReportPage() {
             <li>• Mentionnez les technologies et outils utilisés</li>
             <li>• Notez les difficultés rencontrées et comment vous les avez résolues</li>
             <li>• Décrivez les compétences acquises ou développées</li>
+            <li>• Ajoutez des captures d'écran ou documents pour illustrer votre travail</li>
           </ul>
         </div>
       </div>
