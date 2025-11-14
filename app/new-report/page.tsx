@@ -1,3 +1,4 @@
+// app/new-report/page.tsx
 'use client';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -13,7 +14,6 @@ export default function NewReportPage() {
   });
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
-  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -21,7 +21,7 @@ export default function NewReportPage() {
       
       // Vérifier la taille des fichiers
       const validFiles = newFiles.filter(file => {
-        if (file.size > 10 * 1024 * 1024) { // 10MB
+        if (file.size > 10 * 1024 * 1024) {
           alert(`Le fichier ${file.name} est trop volumineux. Taille max: 10MB`);
           return false;
         }
@@ -36,88 +36,109 @@ export default function NewReportPage() {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const uploadFile = async (file: File, reportId: string): Promise<any> => {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
-    const filePath = `${reportId}/${fileName}`;
+  // FONCTION UPLOAD CORRIGÉE
+  const uploadFile = async (file: File, reportId: string) => {
+    try {
+      console.log('🚀 Début upload fichier:', file.name);
+      
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+      const filePath = `${reportId}/${fileName}`;
 
-    // Marquer le fichier comme en cours d'upload
-    setUploadingFiles(prev => new Set(prev).add(file.name));
+      console.log('📤 Upload vers:', filePath);
 
-    const { error } = await supabase.storage
-      .from('reports')
-      .upload(filePath, file);
+      // 1. Upload du fichier vers Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('reports')
+        .upload(filePath, file);
 
-    if (error) {
-      console.error('Error uploading file:', error);
-      // Retirer le fichier de la liste d'upload en cas d'erreur
-      setUploadingFiles(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(file.name);
-        return newSet;
-      });
+      if (uploadError) {
+        console.error('❌ Erreur upload:', uploadError);
+        return null;
+      }
+
+      console.log('✅ Upload réussi:', uploadData);
+
+      // 2. Récupérer l'URL publique
+      const { data: urlData } = supabase.storage
+        .from('reports')
+        .getPublicUrl(filePath);
+
+      console.log('🔗 URL publique:', urlData);
+
+      return {
+        name: file.name,
+        url: urlData.publicUrl,
+        path: filePath,
+        size: file.size,
+        type: file.type,
+        uploaded_at: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('💥 Erreur dans uploadFile:', error);
       return null;
     }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('reports')
-      .getPublicUrl(filePath);
-
-    // Retirer le fichier de la liste d'upload une fois terminé
-    setUploadingFiles(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(file.name);
-      return newSet;
-    });
-
-    return {
-      name: file.name,
-      url: publicUrl,
-      path: filePath,
-      size: file.size,
-      type: file.type,
-      uploaded_at: new Date().toISOString()
-    };
   };
 
+  // FONCTION SUBMIT CORRIGÉE
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
+    console.log('📝 Début création rapport...');
+    console.log('📎 Fichiers à uploader:', files);
+
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
+      alert('❌ Vous devez être connecté');
       setLoading(false);
       return;
     }
 
     try {
-      // Créer le rapport d'abord
-      const { data: report, error } = await supabase
+      // ÉTAPE 1: Créer le rapport (sans pièces jointes d'abord)
+      console.log('🆕 Création du rapport...');
+      const { data: report, error: reportError } = await supabase
         .from('reports')
         .insert({
           user_id: session.user.id,
           date: date,
           title,
           content,
-          attachments: [] // Initialiser avec un tableau vide
+          attachments: [] // Tableau vide initial
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (reportError) {
+        console.error('❌ Erreur création rapport:', reportError);
+        throw reportError;
+      }
 
-      // Uploader les fichiers si présents
+      console.log('✅ Rapport créé:', report);
+
+      // ÉTAPE 2: Uploader les fichiers si présents
       let uploadedFiles = [];
       if (files.length > 0 && report) {
+        console.log('🔄 Début upload des fichiers...');
+        
         for (const file of files) {
+          console.log(`📤 Upload de: ${file.name}`);
           const uploadedFile = await uploadFile(file, report.id);
+          
           if (uploadedFile) {
+            console.log(`✅ Fichier uploadé: ${uploadedFile.name}`);
             uploadedFiles.push(uploadedFile);
+          } else {
+            console.log(`❌ Échec upload: ${file.name}`);
           }
         }
 
-        // Mettre à jour le rapport avec les fichiers uploadés
+        console.log('📊 Fichiers uploadés:', uploadedFiles);
+
+        // ÉTAPE 3: Mettre à jour le rapport avec les pièces jointes
         if (uploadedFiles.length > 0) {
+          console.log('🔄 Mise à jour du rapport avec pièces jointes...');
           const { error: updateError } = await supabase
             .from('reports')
             .update({ 
@@ -126,37 +147,38 @@ export default function NewReportPage() {
             })
             .eq('id', report.id);
 
-          if (updateError) throw updateError;
+          if (updateError) {
+            console.error('❌ Erreur mise à jour attachments:', updateError);
+            throw updateError;
+          }
+          console.log('✅ Rapport mis à jour avec pièces jointes');
+        } else {
+          console.log('ℹ️ Aucun fichier à attacher');
         }
       }
 
+      console.log('🎉 Redirection vers /reports');
       router.push('/reports');
+      
     } catch (error) {
-      console.error('Error creating report:', error);
-      alert('Erreur lors de la création du rapport. Veuillez réessayer.');
+      console.error('💥 Erreur finale:', error);
+      alert('Erreur lors de la création du rapport. Voir la console pour les détails.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Fonction pour afficher l'aperçu des images
+  // Fonction pour afficher l'aperçu des fichiers
   const renderFilePreview = (file: File, index: number) => {
-    const isUploading = uploadingFiles.has(file.name);
-
     if (file.type.startsWith('image/')) {
       return (
         <div className="flex items-center space-x-3">
-          <div className="flex-shrink-0 relative">
+          <div className="flex-shrink-0">
             <img 
               src={URL.createObjectURL(file)} 
               alt={file.name}
               className="h-12 w-12 object-cover rounded-lg"
             />
-            {isUploading && (
-              <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-              </div>
-            )}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-900 truncate">
@@ -165,44 +187,27 @@ export default function NewReportPage() {
             <p className="text-sm text-gray-500">
               {(file.size / 1024 / 1024).toFixed(2)} MB
             </p>
-            {isUploading && (
-              <div className="flex items-center space-x-2 mt-1">
-                <div className="text-xs text-blue-600">Upload en cours...</div>
-              </div>
-            )}
           </div>
         </div>
       );
     }
 
     return (
-      <div className="flex items-center justify-between w-full">
-        <div className="flex items-center space-x-3">
-          <div className="flex-shrink-0 relative">
-            <div className="h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
-              <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            {isUploading && (
-              <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-              </div>
-            )}
+      <div className="flex items-center space-x-3">
+        <div className="flex-shrink-0">
+          <div className="h-12 w-12 bg-gray-100 rounded-lg flex items-center justify-center">
+            <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
-              {file.name}
-            </p>
-            <p className="text-sm text-gray-500">
-              {(file.size / 1024 / 1024).toFixed(2)} MB
-            </p>
-            {isUploading && (
-              <div className="flex items-center space-x-2 mt-1">
-                <div className="text-xs text-blue-600">Upload en cours...</div>
-              </div>
-            )}
-          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900 truncate">
+            {file.name}
+          </p>
+          <p className="text-sm text-gray-500">
+            {(file.size / 1024 / 1024).toFixed(2)} MB
+          </p>
         </div>
       </div>
     );
@@ -252,11 +257,6 @@ export default function NewReportPage() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                 />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </div>
               </div>
             </div>
 
@@ -275,18 +275,13 @@ export default function NewReportPage() {
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                 />
-                <div className="absolute top-3 right-3">
-                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
               </div>
               <p className="mt-2 text-sm text-gray-500">
                 {content.length} caractères
               </p>
             </div>
 
-            {/* File Upload - SECTION AMÉLIORÉE */}
+            {/* File Upload */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Fichiers joints (optionnel)
@@ -314,7 +309,7 @@ export default function NewReportPage() {
                 </p>
               </div>
 
-              {/* File List - AMÉLIORÉE */}
+              {/* File List */}
               {files.length > 0 && (
                 <div className="mt-4 space-y-3">
                   <h4 className="text-sm font-medium text-gray-700">
@@ -327,7 +322,6 @@ export default function NewReportPage() {
                         type="button"
                         onClick={() => removeFile(index)}
                         className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-50 transition-colors duration-200"
-                        disabled={uploadingFiles.has(file.name)}
                       >
                         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -347,12 +341,7 @@ export default function NewReportPage() {
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-3 px-6 rounded-lg transition-all duration-200 text-center"
                 disabled={loading}
               >
-                <div className="flex items-center justify-center">
-                  <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                  </svg>
-                  Retour
-                </div>
+                Retour
               </button>
               
               <button
@@ -360,42 +349,10 @@ export default function NewReportPage() {
                 disabled={loading || !title.trim() || !content.trim()}
                 className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
               >
-                {loading ? (
-                  <div className="flex items-center justify-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Enregistrement...
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center">
-                    <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Enregistrer le rapport
-                  </div>
-                )}
+                {loading ? 'Enregistrement...' : 'Enregistrer le rapport'}
               </button>
             </div>
           </form>
-        </div>
-
-        {/* Tips Section */}
-        <div className="mt-8 bg-blue-50 rounded-xl p-6 border border-blue-200">
-          <h3 className="font-semibold text-blue-800 mb-3 flex items-center">
-            <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-            </svg>
-            Conseils pour un bon rapport
-          </h3>
-          <ul className="text-blue-700 text-sm space-y-2">
-            <li>• Soyez précis et détaillé dans vos descriptions</li>
-            <li>• Mentionnez les technologies et outils utilisés</li>
-            <li>• Notez les difficultés rencontrées et comment vous les avez résolues</li>
-            <li>• Décrivez les compétences acquises ou développées</li>
-            <li>• Ajoutez des captures d'écran ou documents pour illustrer votre travail</li>
-          </ul>
         </div>
       </div>
     </div>
