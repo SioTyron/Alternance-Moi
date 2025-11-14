@@ -7,7 +7,8 @@ export default function NewReportPage() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  // CORRECTION : Utiliser toLocaleDateString pour éviter le décalage de fuseau horaire
+  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA')); // Format YYYY-MM-DD
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
 
@@ -59,12 +60,18 @@ export default function NewReportPage() {
     }
 
     try {
+      // CORRECTION : Convertir la date en format ISO sans décalage de temps
+      const dateObj = new Date(date);
+      // Ajouter le décalage de fuseau pour avoir la date exacte
+      const timezoneOffset = dateObj.getTimezoneOffset() * 60000;
+      const correctedDate = new Date(dateObj.getTime() - timezoneOffset);
+      
       // Créer le rapport
       const { data: report, error } = await supabase
         .from('reports')
         .insert({
           user_id: session.user.id,
-          date,
+          date: correctedDate.toISOString().split('T')[0], // Stocker seulement la date
           title,
           content,
         })
@@ -114,26 +121,19 @@ export default function NewReportPage() {
         {/* Form Card */}
         <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
           <form onSubmit={submit} className="space-y-6">
-            {/* Date Field */}
+            {/* Date Field - CORRIGÉ */}
             <div>
               <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
-                Date de l'activité
+                Date de l'activité *
               </label>
-              <div className="relative">
-                <input
-                  id="date"
-                  type="date"
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 outline-none text-gray-900"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-              </div>
+              <input
+                id="date"
+                type="date"
+                required
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 outline-none text-gray-900"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
             </div>
 
             {/* Title Field */}
