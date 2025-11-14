@@ -37,10 +37,8 @@ export default function HomePage() {
   }
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-100 flex-1">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
-        {/* Supprimé le header qui est maintenant dans le layout */}
-
         {/* Main Content */}
         <div className="max-w-4xl mx-auto">
           {session ? (
@@ -94,23 +92,25 @@ export default function HomePage() {
               </div>
             </div>
           ) : (
-            /* Not Connected State */
-            <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md mx-auto text-center">
-              <div className="h-16 w-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
+            /* Not Connected State - CENTRÉ VERTICALEMENT ET HORIZONTALEMENT */
+            <div className="min-h-[80vh] flex items-center justify-center">
+              <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+                <div className="h-16 w-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-semibold text-gray-900 mb-4">Connectez-vous</h2>
+                <p className="text-gray-600 mb-6">
+                  Connectez-vous pour accéder à toutes les fonctionnalités de suivi de votre alternance.
+                </p>
+                <Link 
+                  href="/login" 
+                  className="inline-block bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-3 px-8 rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
+                >
+                  Se connecter
+                </Link>
               </div>
-              <h2 className="text-2xl font-semibold text-gray-900 mb-4">Connectez-vous</h2>
-              <p className="text-gray-600 mb-6">
-                Connectez-vous pour accéder à toutes les fonctionnalités de suivi de votre alternance.
-              </p>
-              <Link 
-                href="/login" 
-                className="inline-block bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-3 px-8 rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
-              >
-                Se connecter
-              </Link>
             </div>
           )}
         </div>
