@@ -1,8 +1,19 @@
 // app/new-report/page.tsx
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
+
+const ALLOWED_MIME_TYPES = [
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+];
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_TITLE_LENGTH = 200;
+const MAX_CONTENT_LENGTH = 10000;
 
 export default function NewReportPage() {
   const router = useRouter();
@@ -15,19 +26,28 @@ export default function NewReportPage() {
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) router.push('/login');
+    });
+  }, [router]);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
-      
-      // Vérifier la taille des fichiers
+
       const validFiles = newFiles.filter(file => {
-        if (file.size > 10 * 1024 * 1024) {
+        if (file.size > MAX_FILE_SIZE) {
           alert(`Le fichier ${file.name} est trop volumineux. Taille max: 10MB`);
+          return false;
+        }
+        if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+          alert(`Le type de fichier ${file.name} n'est pas autorisé.`);
           return false;
         }
         return true;
       });
-      
+
       setFiles(prev => [...prev, ...validFiles]);
     }
   };
@@ -36,35 +56,21 @@ export default function NewReportPage() {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // FONCTION UPLOAD CORRIGÉE
   const uploadFile = async (file: File, reportId: string) => {
     try {
-      console.log('🚀 Début upload fichier:', file.name);
-      
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
       const filePath = `${reportId}/${fileName}`;
 
-      console.log('📤 Upload vers:', filePath);
-
-      // 1. Upload du fichier vers Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('reports')
         .upload(filePath, file);
 
-      if (uploadError) {
-        console.error('❌ Erreur upload:', uploadError);
-        return null;
-      }
+      if (uploadError) return null;
 
-      console.log('✅ Upload réussi:', uploadData);
-
-      // 2. Récupérer l'URL publique
       const { data: urlData } = supabase.storage
         .from('reports')
         .getPublicUrl(filePath);
-
-      console.log('🔗 URL publique:', urlData);
 
       return {
         name: file.name,
@@ -74,95 +80,60 @@ export default function NewReportPage() {
         type: file.type,
         uploaded_at: new Date().toISOString()
       };
-    } catch (error) {
-      console.error('💥 Erreur dans uploadFile:', error);
+    } catch {
       return null;
     }
   };
 
-  // FONCTION SUBMIT CORRIGÉE
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    console.log('📝 Début création rapport...');
-    console.log('📎 Fichiers à uploader:', files);
-
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-      alert('❌ Vous devez être connecté');
+      router.push('/login');
       setLoading(false);
       return;
     }
 
     try {
-      // ÉTAPE 1: Créer le rapport (sans pièces jointes d'abord)
-      console.log('🆕 Création du rapport...');
       const { data: report, error: reportError } = await supabase
         .from('reports')
         .insert({
           user_id: session.user.id,
           date: date,
-          title,
-          content,
-          attachments: [] // Tableau vide initial
+          title: title.trim().slice(0, MAX_TITLE_LENGTH),
+          content: content.trim().slice(0, MAX_CONTENT_LENGTH),
+          attachments: []
         })
         .select()
         .single();
 
-      if (reportError) {
-        console.error('❌ Erreur création rapport:', reportError);
-        throw reportError;
-      }
+      if (reportError) throw reportError;
 
-      console.log('✅ Rapport créé:', report);
-
-      // ÉTAPE 2: Uploader les fichiers si présents
-      let uploadedFiles = [];
+      const uploadedFiles = [];
       if (files.length > 0 && report) {
-        console.log('🔄 Début upload des fichiers...');
-        
         for (const file of files) {
-          console.log(`📤 Upload de: ${file.name}`);
           const uploadedFile = await uploadFile(file, report.id);
-          
-          if (uploadedFile) {
-            console.log(`✅ Fichier uploadé: ${uploadedFile.name}`);
-            uploadedFiles.push(uploadedFile);
-          } else {
-            console.log(`❌ Échec upload: ${file.name}`);
-          }
+          if (uploadedFile) uploadedFiles.push(uploadedFile);
         }
 
-        console.log('📊 Fichiers uploadés:', uploadedFiles);
-
-        // ÉTAPE 3: Mettre à jour le rapport avec les pièces jointes
         if (uploadedFiles.length > 0) {
-          console.log('🔄 Mise à jour du rapport avec pièces jointes...');
           const { error: updateError } = await supabase
             .from('reports')
-            .update({ 
+            .update({
               attachments: uploadedFiles,
               updated_at: new Date().toISOString()
             })
             .eq('id', report.id);
 
-          if (updateError) {
-            console.error('❌ Erreur mise à jour attachments:', updateError);
-            throw updateError;
-          }
-          console.log('✅ Rapport mis à jour avec pièces jointes');
-        } else {
-          console.log('ℹ️ Aucun fichier à attacher');
+          if (updateError) throw updateError;
         }
       }
 
-      console.log('🎉 Redirection vers /reports');
       router.push('/reports');
-      
-    } catch (error) {
-      console.error('💥 Erreur finale:', error);
-      alert('Erreur lors de la création du rapport. Voir la console pour les détails.');
+    } catch {
+      alert('Erreur lors de la création du rapport.');
     } finally {
       setLoading(false);
     }
@@ -252,6 +223,7 @@ export default function NewReportPage() {
                   id="title"
                   type="text"
                   required
+                  maxLength={MAX_TITLE_LENGTH}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 outline-none text-gray-900"
                   placeholder="Ex: Développement d'une feature d'authentification"
                   value={title}
@@ -270,6 +242,7 @@ export default function NewReportPage() {
                   id="content"
                   required
                   rows={8}
+                  maxLength={MAX_CONTENT_LENGTH}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 outline-none text-gray-900 resize-none"
                   placeholder="Décrivez en détail les tâches réalisées, les technologies utilisées, les difficultés rencontrées et les compétences acquises..."
                   value={content}

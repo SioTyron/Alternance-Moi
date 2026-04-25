@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<any>(null);
@@ -12,16 +14,22 @@ export default function ReportsPage() {
 
   useEffect(() => {
     const fetchReports = async () => {
-      const { data, error } = await supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/login');
+        return;
+      }
+
+      const { data } = await supabase
         .from('reports')
         .select('*')
         .order('date', { ascending: false });
-      
+
       if (data) setReports(data);
       setLoading(false);
     };
     fetchReports();
-  }, []);
+  }, [router]);
 
   // CORRECTION : Fonction de formatage de date qui gère le format YYYY-MM-DD
   const formatDate = (dateString: string) => {

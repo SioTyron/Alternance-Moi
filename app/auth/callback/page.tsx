@@ -28,23 +28,29 @@ export default function AuthCallback() {
           }
 
           if (session) {
-            // Fermer la fenêtre si c'est un popup, sinon rediriger
-            if (window.opener) {
-              window.opener.location.reload();
-              window.close();
-            } else {
+            try {
+              if (window.opener && window.opener.location.origin === window.location.origin) {
+                window.opener.location.reload();
+                window.close();
+              } else {
+                router.push('/');
+              }
+            } catch {
               router.push('/');
             }
           }
         } else {
-          // Si pas de token, vérifier la session normalement
           const { data: { session } } = await supabase.auth.getSession();
-          
+
           if (session) {
-            if (window.opener) {
-              window.opener.location.reload();
-              window.close();
-            } else {
+            try {
+              if (window.opener && window.opener.location.origin === window.location.origin) {
+                window.opener.location.reload();
+                window.close();
+              } else {
+                router.push('/');
+              }
+            } catch {
               router.push('/');
             }
           } else {

@@ -3,6 +3,17 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter, useParams } from 'next/navigation';
 
+const ALLOWED_MIME_TYPES = [
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+];
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_TITLE_LENGTH = 200;
+const MAX_CONTENT_LENGTH = 10000;
+
 export default function EditReportPage() {
   const router = useRouter();
   const params = useParams();
@@ -69,7 +80,20 @@ export default function EditReportPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
-      setFiles(prev => [...prev, ...newFiles]);
+
+      const validFiles = newFiles.filter(file => {
+        if (file.size > MAX_FILE_SIZE) {
+          alert(`Le fichier ${file.name} est trop volumineux. Taille max: 10MB`);
+          return false;
+        }
+        if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+          alert(`Le type de fichier ${file.name} n'est pas autorisé.`);
+          return false;
+        }
+        return true;
+      });
+
+      setFiles(prev => [...prev, ...validFiles]);
     }
   };
 
@@ -103,7 +127,7 @@ export default function EditReportPage() {
   const uploadFile = async (file: File, reportId: string) => {
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
       const filePath = `${reportId}/${fileName}`;
 
       const { error } = await supabase.storage
@@ -144,34 +168,26 @@ export default function EditReportPage() {
         return;
       }
 
-      // Valider les champs requis
       if (!title.trim() || !content.trim() || !date) {
         setErrorMessage('Veuillez remplir tous les champs obligatoires');
         return;
       }
 
-      // Uploader les nouveaux fichiers
       const uploadedFiles = [];
       for (const file of files) {
         const uploadedFile = await uploadFile(file, reportId);
-        if (uploadedFile) {
-          uploadedFiles.push(uploadedFile);
-        }
+        if (uploadedFile) uploadedFiles.push(uploadedFile);
       }
 
-      // Combiner les anciennes pièces jointes avec les nouvelles
       const allAttachments = [...existingAttachments, ...uploadedFiles];
 
-      // Préparer les données de mise à jour
       const updateData = {
         date,
-        title: title.trim(),
-        content: content.trim(),
+        title: title.trim().slice(0, MAX_TITLE_LENGTH),
+        content: content.trim().slice(0, MAX_CONTENT_LENGTH),
         attachments: allAttachments,
         updated_at: new Date().toISOString()
       };
-
-      console.log('Données de mise à jour:', updateData);
 
       // Mettre à jour le rapport
       const { data, error } = await supabase
@@ -189,7 +205,6 @@ export default function EditReportPage() {
         throw new Error('Aucune donnée retournée après mise à jour');
       }
 
-      console.log('Rapport mis à jour avec succès:', data);
       router.push('/reports');
       
     } catch (error: any) {
@@ -291,6 +306,7 @@ export default function EditReportPage() {
                   id="title"
                   type="text"
                   required
+                  maxLength={MAX_TITLE_LENGTH}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 outline-none text-gray-900"
                   placeholder="Ex: Développement d'une feature d'authentification"
                   value={title}
@@ -314,6 +330,7 @@ export default function EditReportPage() {
                   id="content"
                   required
                   rows={8}
+                  maxLength={MAX_CONTENT_LENGTH}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 outline-none text-gray-900 resize-none"
                   placeholder="Décrivez en détail les tâches réalisées, les technologies utilisées, les difficultés rencontrées et les compétences acquises..."
                   value={content}
@@ -342,6 +359,7 @@ export default function EditReportPage() {
                   onChange={handleFileSelect}
                   className="hidden"
                   id="file-upload"
+                  accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.txt"
                 />
                 <label
                   htmlFor="file-upload"
