@@ -2,6 +2,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { exportAllReportsToPDF } from '@/lib/exportReports';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -11,6 +12,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const fetchReports = async () => {
@@ -144,6 +146,19 @@ export default function ReportsPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const handleExportAll = async () => {
+    if (reports.length === 0 || exporting) return;
+    setExporting(true);
+    try {
+      await exportAllReportsToPDF(reports);
+    } catch (error) {
+      console.error('Error exporting reports:', error);
+      alert("Erreur lors de l'export PDF des rapports");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleDelete = async (reportId: string) => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer ce rapport ?')) {
       return;
@@ -197,6 +212,28 @@ export default function ReportsPage() {
             Mes Rapports
           </h1>
           <p className="text-gray-600 mt-2">Consultez l'historique de vos activités d'alternance</p>
+
+          {reports.length > 0 && (
+            <button
+              onClick={handleExportAll}
+              disabled={exporting}
+              className="mt-4 inline-flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-2.5 px-5 rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
+            >
+              {exporting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Export en cours...
+                </>
+              ) : (
+                <>
+                  <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Tout exporter en PDF
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Stats Card */}
