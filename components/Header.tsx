@@ -85,6 +85,16 @@ export default function Header() {
                 >
                   Nouveau Rapport
                 </Link>
+                <Link
+                  href="/profile"
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                    isActive('/profile')
+                      ? 'text-blue-600 bg-blue-50'
+                      : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                  }`}
+                >
+                  Profil
+                </Link>
                 <button
                   onClick={handleSignOut}
                   className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-red-600 hover:bg-gray-50 transition-colors duration-200"
@@ -157,6 +167,17 @@ export default function Header() {
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Nouveau Rapport
+                  </Link>
+                  <Link
+                    href="/profile"
+                    className={`px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 ${
+                      isActive('/profile')
+                        ? 'text-blue-600 bg-blue-50'
+                        : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                    }`}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Profil
                   </Link>
                   <button
                     onClick={handleSignOut}
