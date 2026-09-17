@@ -32,6 +32,8 @@ export default function NotesPage() {
   const [formationForm, setFormationForm] = useState<FormationForm>(EMPTY_FORMATION);
   const [newUeName, setNewUeName] = useState('');
   const [gradeInputs, setGradeInputs] = useState<Record<string, GradeInput>>({});
+  const [editingGradeId, setEditingGradeId] = useState<string | null>(null);
+  const [editGrade, setEditGrade] = useState<GradeInput>(EMPTY_GRADE);
   const [busy, setBusy] = useState(false);
 
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
@@ -219,23 +221,78 @@ export default function NotesPage() {
     setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: u.grades.filter((g) => g.id !== gradeId) } : u)));
   };
 
+  const startEditGrade = (g: Grade) => {
+    setEditingGradeId(g.id);
+    setEditGrade({
+      value: String(Number(g.value)),
+      coefficient: Number(g.coefficient) === 1 ? '' : String(Number(g.coefficient)),
+      label: g.label ?? '',
+    });
+  };
+
+  const cancelEditGrade = () => {
+    setEditingGradeId(null);
+    setEditGrade(EMPTY_GRADE);
+  };
+
+  const saveEditGrade = async (e: React.FormEvent, ueId: string) => {
+    e.preventDefault();
+    if (!editingGradeId) return;
+    const value = parseFloat(editGrade.value.replace(',', '.'));
+    if (isNaN(value) || value < 0 || value > 20) {
+      alert('La note doit être un nombre entre 0 et 20.');
+      return;
+    }
+    let coefficient = parseFloat((editGrade.coefficient || '1').replace(',', '.'));
+    if (isNaN(coefficient) || coefficient <= 0) coefficient = 1;
+
+    const { data } = await supabase
+      .from('grades')
+      .update({ value, coefficient, label: editGrade.label.trim() || null })
+      .eq('id', editingGradeId)
+      .select('id, ue_id, label, value, coefficient')
+      .single();
+
+    if (data) {
+      setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: u.grades.map((g) => (g.id === data.id ? (data as Grade) : g)) } : u)));
+    }
+    cancelEditGrade();
+  };
+
   const fmtCoef = (c: number) => (Number(c) === 1 ? '' : ` · coef ${Number(c)}`);
 
   // ---- Blocs réutilisables ------------------------------------------
   const gradeChips = (ue: UE) =>
     ue.grades.length > 0 ? (
       <div className="flex flex-wrap gap-2">
-        {ue.grades.map((g) => (
-          <span key={g.id} className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-2 py-1.5 text-sm">
-            <span className="font-semibold text-slate-800">{Number(g.value)}</span>
-            <span className="text-slate-400">/20</span>
-            {g.label && <span className="text-slate-500">· {g.label}</span>}
-            <span className="text-slate-400">{fmtCoef(g.coefficient)}</span>
-            <button onClick={() => deleteGrade(ue.id, g.id)} className="ml-1 text-slate-300 hover:text-red-500" title="Supprimer la note">
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </span>
-        ))}
+        {ue.grades.map((g) =>
+          editingGradeId === g.id ? (
+            <form key={g.id} onSubmit={(e) => saveEditGrade(e, ue.id)} className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-300 rounded-lg px-2 py-1.5">
+              <input type="number" step="0.01" min="0" max="20" required autoFocus value={editGrade.value} onChange={(e) => setEditGrade({ ...editGrade, value: e.target.value })} className="w-16 px-2 py-1 border border-slate-300 rounded text-sm" title="Note /20" />
+              <input type="number" step="0.01" min="0" value={editGrade.coefficient} onChange={(e) => setEditGrade({ ...editGrade, coefficient: e.target.value })} placeholder="coef" className="w-14 px-2 py-1 border border-slate-300 rounded text-sm" title="Coefficient" />
+              <input type="text" value={editGrade.label} onChange={(e) => setEditGrade({ ...editGrade, label: e.target.value })} placeholder="libellé" className="w-24 px-2 py-1 border border-slate-300 rounded text-sm" title="Libellé" />
+              <button type="submit" className="text-green-600 hover:text-green-700 p-0.5" title="Enregistrer">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              </button>
+              <button type="button" onClick={cancelEditGrade} className="text-slate-400 hover:text-slate-600 p-0.5" title="Annuler">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </form>
+          ) : (
+            <span key={g.id} className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-1.5 py-1.5 text-sm">
+              <span className="font-semibold text-slate-800">{Number(g.value)}</span>
+              <span className="text-slate-400">/20</span>
+              {g.label && <span className="text-slate-500">· {g.label}</span>}
+              <span className="text-slate-400">{fmtCoef(g.coefficient)}</span>
+              <button onClick={() => startEditGrade(g)} className="ml-1 text-slate-300 hover:text-blue-600" title="Modifier la note">
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+              </button>
+              <button onClick={() => deleteGrade(ue.id, g.id)} className="text-slate-300 hover:text-red-500" title="Supprimer la note">
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </span>
+          )
+        )}
       </div>
     ) : (
       <p className="text-sm text-slate-400">Aucune note pour cette UE.</p>
