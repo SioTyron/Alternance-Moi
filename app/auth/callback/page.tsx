@@ -67,8 +67,8 @@ export default function AuthCallback() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-      <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+    <div className="min-h-screen app-bg flex items-center justify-center">
+      <div className="card p-8 text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
         <p className="mt-4 text-gray-600">Finalisation de la connexion...</p>
         <p className="text-sm text-gray-500 mt-2">Redirection en cours</p>

@@ -27,131 +27,110 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+      <div className="min-h-screen app-bg flex items-center justify-center">
+        <div className="card p-8 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Chargement...</p>
+          <p className="mt-4 text-slate-600">Chargement...</p>
         </div>
       </div>
     );
   }
 
+  const firstName = session?.user?.email ? session.user.email.split('@')[0] : '';
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8">
-        {/* Main Content */}
-        <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen app-bg">
+      <div className="container mx-auto px-4 py-10">
+        <div className="max-w-5xl mx-auto">
           {session ? (
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Welcome Card */}
-              <div className="bg-white rounded-2xl shadow-xl p-8">
-                <div className="flex items-center mb-6">
-                  <div className="h-12 w-12 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center">
-                    <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </div>
-                  <div className="ml-4">
-                    <h2 className="text-2xl font-semibold text-gray-900">Bienvenue !</h2>
-                    <p className="text-gray-600">Heureux de vous revoir</p>
-                  </div>
-                </div>
-                <p className="text-gray-700 mb-6">
-                  Vous êtes connecté et pouvez maintenant gérer vos rapports d'alternance.
+            <>
+              {/* Hero */}
+              <div className="animate-in mb-8">
+                <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 ring-1 ring-blue-100">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+                  Connecté
+                </span>
+                <h1 className="mt-4 text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">
+                  Bonjour <span className="gradient-text capitalize">{firstName}</span> 👋
+                </h1>
+                <p className="mt-2 text-slate-600 text-lg">
+                  Voici votre espace de suivi d'alternance.
                 </p>
               </div>
 
-              {/* Actions Card */}
-              <div className="bg-white rounded-2xl shadow-xl p-8">
-                <h3 className="text-xl font-semibold text-gray-900 mb-6">Actions rapides</h3>
-                <div className="space-y-4">
-                  <Link 
-                    href="/new-report" 
-                    className="block w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-[1.02] text-center"
-                  >
-                    <div className="flex items-center justify-center">
-                      <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      Créer un nouveau rapport
-                    </div>
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Carte création */}
+                <div className="card card-hover p-8 animate-in" style={{ animationDelay: '60ms' }}>
+                  <div className="h-12 w-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-500/30 mb-5">
+                    <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-1">Nouveau rapport</h3>
+                  <p className="text-slate-600 text-sm mb-5">Documentez une nouvelle activité en quelques secondes.</p>
+                  <Link href="/new-report" className="btn btn-primary w-full py-3">
+                    Créer un rapport
                   </Link>
-                  
-                  <Link 
-                    href="/reports" 
-                    className="block w-full border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white font-medium py-4 px-6 rounded-lg transition-all duration-200 text-center"
+                </div>
+
+                {/* Carte consultation */}
+                <div className="card card-hover p-8 animate-in" style={{ animationDelay: '120ms' }}>
+                  <div className="h-12 w-12 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-md shadow-indigo-500/30 mb-5">
+                    <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-1">Mes rapports</h3>
+                  <p className="text-slate-600 text-sm mb-5">Consultez, modifiez et exportez votre historique.</p>
+                  <Link
+                    href="/reports"
+                    className="btn w-full py-3 border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white"
                   >
-                    <div className="flex items-center justify-center">
-                      <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Voir mes rapports
-                    </div>
+                    Voir mes rapports
                   </Link>
                 </div>
               </div>
-            </div>
+
+              {/* Fonctionnalités */}
+              <div className="mt-14">
+                <h3 className="text-xl font-semibold text-center text-slate-900 mb-8">Ce que vous pouvez faire</h3>
+                <div className="grid md:grid-cols-3 gap-5">
+                  {[
+                    { iconBg: 'bg-blue-100', iconText: 'text-blue-600', title: 'Rapports détaillés', desc: "Créez et gérez vos rapports d'activité facilement", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /> },
+                    { iconBg: 'bg-green-100', iconText: 'text-green-600', title: 'Pièces jointes', desc: 'Ajoutez images, PDF et documents à vos rapports', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /> },
+                    { iconBg: 'bg-purple-100', iconText: 'text-purple-600', title: 'Export PDF', desc: 'Exportez tous vos rapports en un clic', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /> },
+                  ].map((f, i) => (
+                    <div key={i} className="card card-hover p-6 text-center animate-in" style={{ animationDelay: `${150 + i * 60}ms` }}>
+                      <div className={`h-12 w-12 ${f.iconBg} rounded-xl flex items-center justify-center mx-auto mb-4`}>
+                        <svg className={`h-6 w-6 ${f.iconText}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">{f.icon}</svg>
+                      </div>
+                      <h4 className="font-semibold text-slate-900 mb-1">{f.title}</h4>
+                      <p className="text-slate-600 text-sm">{f.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
           ) : (
-            /* Not Connected State - CENTRÉ VERTICALEMENT ET HORIZONTALEMENT */
-            <div className="min-h-[80vh] flex items-center justify-center">
-              <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-                <div className="h-16 w-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            /* Non connecté */
+            <div className="min-h-[78vh] flex items-center justify-center">
+              <div className="card p-8 sm:p-10 max-w-md w-full text-center animate-in">
+                <div className="h-16 w-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/30">
                   <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 </div>
-                <h2 className="text-2xl font-semibold text-gray-900 mb-4">Connectez-vous</h2>
-                <p className="text-gray-600 mb-6">
-                  Connectez-vous pour accéder à toutes les fonctionnalités de suivi de votre alternance.
+                <h2 className="text-2xl font-bold tracking-tight text-slate-900 mb-3">Bienvenue sur Alternance &amp; Moi</h2>
+                <p className="text-slate-600 mb-7">
+                  Connectez-vous pour suivre, documenter et exporter vos activités d'alternance.
                 </p>
-                <Link 
-                  href="/login" 
-                  className="inline-block bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-3 px-8 rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
-                >
+                <Link href="/login" className="btn btn-primary w-full py-3">
                   Se connecter
                 </Link>
               </div>
             </div>
           )}
         </div>
-
-        {/* Features Section */}
-        {session && (
-          <div className="max-w-4xl mx-auto mt-16">
-            <h3 className="text-2xl font-semibold text-center text-gray-900 mb-8">Fonctionnalités</h3>
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className="bg-white rounded-xl p-6 text-center shadow-lg">
-                <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Rapports détaillés</h4>
-                <p className="text-gray-600 text-sm">Créez et gérez vos rapports d'activité facilement</p>
-              </div>
-              
-              <div className="bg-white rounded-xl p-6 text-center shadow-lg">
-                <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Suivi en temps réel</h4>
-                <p className="text-gray-600 text-sm">Visualisez l'évolution de votre alternance</p>
-              </div>
-              
-              <div className="bg-white rounded-xl p-6 text-center shadow-lg">
-                <div className="h-12 w-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-                  </svg>
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Sauvegarde cloud</h4>
-                <p className="text-gray-600 text-sm">Vos données sont sécurisées et accessibles partout</p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

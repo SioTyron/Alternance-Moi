@@ -185,7 +185,7 @@ export default function NewReportPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
+    <div className="min-h-screen app-bg py-8 px-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -196,7 +196,7 @@ export default function NewReportPage() {
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
+        <div className="card p-6 md:p-8">
           <form onSubmit={submit} className="space-y-6">
             {/* Date Field */}
             <div>

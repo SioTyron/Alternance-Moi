@@ -217,8 +217,8 @@ export default function EditReportPage() {
 
   if (fetchLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+      <div className="min-h-screen app-bg flex items-center justify-center">
+        <div className="card p-8 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Chargement du rapport...</p>
         </div>
@@ -228,8 +228,8 @@ export default function EditReportPage() {
 
   if (errorMessage && !fetchLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md">
+      <div className="min-h-screen app-bg flex items-center justify-center">
+        <div className="card p-8 text-center max-w-md">
           <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -249,7 +249,7 @@ export default function EditReportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
+    <div className="min-h-screen app-bg py-8 px-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -272,7 +272,7 @@ export default function EditReportPage() {
         )}
 
         {/* Form Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
+        <div className="card p-6 md:p-8">
           <form onSubmit={submit} className="space-y-6">
             {/* Date Field */}
             <div>

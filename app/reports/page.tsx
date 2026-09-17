@@ -194,8 +194,8 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+      <div className="min-h-screen app-bg flex items-center justify-center">
+        <div className="card p-8 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Chargement de vos rapports...</p>
         </div>
@@ -204,7 +204,7 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
+    <div className="min-h-screen app-bg py-8 px-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -238,7 +238,7 @@ export default function ReportsPage() {
 
         {/* Stats Card */}
         {reports.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8">
+          <div className="card p-6 mb-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
               <div className="bg-blue-50 rounded-lg p-4">
                 <div className="text-2xl font-bold text-blue-600">{reports.length}</div>
@@ -257,7 +257,7 @@ export default function ReportsPage() {
         {/* Reports List */}
         <div className="space-y-6">
           {reports.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+            <div className="card p-8 text-center">
               <div className="h-16 w-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -276,7 +276,7 @@ export default function ReportsPage() {
             reports.map((report) => (
               <div 
                 key={report.id} 
-                className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden"
+                className="card hover:shadow-xl transition-all duration-300 overflow-hidden"
               >
                 <div className="p-6">
                   {/* Header */}

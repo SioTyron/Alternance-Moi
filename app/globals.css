@@ -2,52 +2,152 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a;
+
+  /* Marque */
+  --brand-600: #2563eb;
+  --brand-700: #1d4ed8;
+  --brand-500: #3b82f6;
+  --accent-600: #4f46e5;
+
+  /* Surfaces & ombres */
+  --ring: rgba(59, 130, 246, 0.45);
+  --shadow-card: 0 10px 30px -12px rgba(30, 41, 59, 0.18), 0 4px 10px -6px rgba(30, 41, 59, 0.08);
+  --shadow-card-hover: 0 20px 45px -15px rgba(30, 41, 59, 0.28), 0 8px 18px -8px rgba(30, 41, 59, 0.12);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ------------------------------------------------------------------ */
+/* Base                                                                */
+/* ------------------------------------------------------------------ */
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
-/* Styles globaux pour résoudre la bande noire */
 html, body {
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100%;
+  min-height: 100%;
   overflow-x: hidden;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Assurer que l'application prend toute la hauteur */
-#__next {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+#__next { min-height: 100vh; display: flex; flex-direction: column; }
+main { flex: 1; }
+* { box-sizing: border-box; }
+
+/* Sélection de texte aux couleurs de la marque */
+::selection {
+  background: color-mix(in srgb, var(--brand-500) 22%, transparent);
+  color: var(--foreground);
 }
 
-/* S'assurer que le contenu principal prend l'espace disponible */
-main {
-  flex: 1;
+/* Barre de défilement discrète */
+* { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: #94a3b8; background-clip: content-box; }
+
+/* ------------------------------------------------------------------ */
+/* Fond de page réutilisable                                           */
+/* ------------------------------------------------------------------ */
+.app-bg {
+  background:
+    radial-gradient(1200px 600px at 12% -8%, #dbeafe 0%, transparent 55%),
+    radial-gradient(1000px 560px at 100% 0%, #ede9fe 0%, transparent 50%),
+    linear-gradient(135deg, #f8fafc 0%, #eff6ff 55%, #eef2ff 100%);
 }
 
-/* Optionnel : pour éviter les débordements horizontaux */
-* {
-  box-sizing: border-box;
+/* ------------------------------------------------------------------ */
+/* Champs de formulaire — appliqués globalement                        */
+/* ------------------------------------------------------------------ */
+input, textarea, select {
+  font: inherit;
+  color: #0f172a;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+/* Anneau de focus accessible et cohérent */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring);
+  border-radius: 0.6rem;
+}
+
+/* Cases/dates aux couleurs de la marque */
+input[type="checkbox"], input[type="radio"], input[type="date"] { accent-color: var(--brand-600); }
+
+/* ------------------------------------------------------------------ */
+/* Utilitaires composants                                              */
+/* ------------------------------------------------------------------ */
+.card {
+  background: #fff;
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+.card-hover { transition: box-shadow .3s ease, transform .3s ease; }
+.card-hover:hover { box-shadow: var(--shadow-card-hover); transform: translateY(-3px); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  font-weight: 600; border-radius: .75rem;
+  transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease, color .18s ease, opacity .18s ease;
+  cursor: pointer;
+}
+.btn:disabled { opacity: .6; cursor: not-allowed; }
+.btn-primary {
+  color: #fff;
+  background-image: linear-gradient(135deg, var(--brand-600), var(--accent-600));
+  box-shadow: 0 10px 22px -10px rgba(37, 99, 235, 0.6);
+}
+.btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 16px 28px -12px rgba(37, 99, 235, 0.7); }
+.btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+/* Titre en dégradé */
+.gradient-text {
+  background-image: linear-gradient(135deg, var(--brand-600), var(--accent-600));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* ------------------------------------------------------------------ */
+/* Animations d'entrée                                                 */
+/* ------------------------------------------------------------------ */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-in { animation: fadeInUp .5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-in { animation: none; }
+  *, *::before, *::after { transition-duration: .01ms !important; }
 }
