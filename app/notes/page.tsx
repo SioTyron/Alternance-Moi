@@ -34,6 +34,8 @@ export default function NotesPage() {
   const [gradeInputs, setGradeInputs] = useState<Record<string, GradeInput>>({});
   const [editingGradeId, setEditingGradeId] = useState<string | null>(null);
   const [editGrade, setEditGrade] = useState<GradeInput>(EMPTY_GRADE);
+  const [editingUeId, setEditingUeId] = useState<string | null>(null);
+  const [editUeName, setEditUeName] = useState('');
   const [busy, setBusy] = useState(false);
 
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
@@ -188,6 +190,25 @@ export default function NotesPage() {
     setUes((prev) => prev.filter((u) => u.id !== ueId));
   };
 
+  const startEditUe = (ue: UE) => {
+    setEditingUeId(ue.id);
+    setEditUeName(ue.name);
+  };
+
+  const cancelEditUe = () => {
+    setEditingUeId(null);
+    setEditUeName('');
+  };
+
+  const saveEditUe = async (e: React.FormEvent, ueId: string) => {
+    e.preventDefault();
+    const name = editUeName.trim();
+    if (!name) return;
+    await supabase.from('ues').update({ name }).eq('id', ueId);
+    setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, name } : u)));
+    cancelEditUe();
+  };
+
   // ---- Notes ---------------------------------------------------------
   const setGradeInput = (ueId: string, patch: Partial<GradeInput>) => {
     setGradeInputs((prev) => ({ ...prev, [ueId]: { ...EMPTY_GRADE, ...prev[ueId], ...patch } }));
@@ -319,6 +340,24 @@ export default function NotesPage() {
     );
   };
 
+  const ueNameForm = (ue: UE) => (
+    <form onSubmit={(e) => saveEditUe(e, ue.id)} className="flex items-center gap-1.5">
+      <input autoFocus required value={editUeName} onChange={(e) => setEditUeName(e.target.value)} className="px-2 py-1 border border-slate-300 rounded text-sm font-medium min-w-0" />
+      <button type="submit" className="text-green-600 hover:text-green-700 p-0.5" title="Enregistrer">
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+      </button>
+      <button type="button" onClick={cancelEditUe} className="text-slate-400 hover:text-slate-600 p-0.5" title="Annuler">
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+      </button>
+    </form>
+  );
+
+  const ueEditBtn = (ue: UE) => (
+    <button onClick={() => startEditUe(ue)} className="text-slate-300 hover:text-blue-600 p-0.5" title="Renommer l'UE">
+      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+    </button>
+  );
+
   const ueAvgBadge = (avg: number | null, sub = 'moyenne UE') => (
     <div className="text-right">
       <div className={`text-xl font-bold ${averageColor(avg)}`}>{formatAverage(avg)}</div>
@@ -343,7 +382,12 @@ export default function NotesPage() {
             <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white flex-shrink-0">
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
             </div>
-            <h3 className="text-lg font-semibold text-slate-900">{ue.name}</h3>
+            {editingUeId === ue.id ? ueNameForm(ue) : (
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-lg font-semibold text-slate-900">{ue.name}</h3>
+                {ueEditBtn(ue)}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {ueAvgBadge(ueAverage(ue.grades))}
@@ -362,14 +406,21 @@ export default function NotesPage() {
         const open = !!expanded[ue.id];
         return (
           <div key={ue.id}>
-            <button onClick={() => toggleExpand(ue.id)} className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-slate-50 transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
-                <svg className={`h-4 w-4 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                <span className="font-medium text-slate-900 truncate">{ue.name}</span>
-                <span className="text-xs text-slate-400 flex-shrink-0">{ue.grades.length} note{ue.grades.length > 1 ? 's' : ''}</span>
+            <div className="w-full flex items-center justify-between gap-3 px-5 py-4">
+              {editingUeId === ue.id ? (
+                <div className="flex-1 min-w-0">{ueNameForm(ue)}</div>
+              ) : (
+                <button onClick={() => toggleExpand(ue.id)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
+                  <svg className={`h-4 w-4 text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                  <span className="font-medium text-slate-900 truncate">{ue.name}</span>
+                  <span className="text-xs text-slate-400 flex-shrink-0">{ue.grades.length} note{ue.grades.length > 1 ? 's' : ''}</span>
+                </button>
+              )}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {editingUeId !== ue.id && ueEditBtn(ue)}
+                <span className={`text-lg font-bold ${averageColor(avg)}`}>{formatAverage(avg)}</span>
               </div>
-              <span className={`text-lg font-bold flex-shrink-0 ${averageColor(avg)}`}>{formatAverage(avg)}</span>
-            </button>
+            </div>
             {open && (
               <div className="px-5 pb-5 space-y-4 bg-slate-50/50">
                 {gradeChips(ue)}
@@ -402,7 +453,14 @@ export default function NotesPage() {
               return (
                 <Fragment key={ue.id}>
                   <tr className="hover:bg-slate-50/60">
-                    <td className="px-5 py-3 font-medium text-slate-900 align-top">{ue.name}</td>
+                    <td className="px-5 py-3 font-medium text-slate-900 align-top">
+                      {editingUeId === ue.id ? ueNameForm(ue) : (
+                        <div className="flex items-center gap-1.5">
+                          <span>{ue.name}</span>
+                          {ueEditBtn(ue)}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-5 py-3 align-top">{gradeChips(ue)}</td>
                     <td className={`px-5 py-3 text-right font-bold align-top ${averageColor(avg)}`}>{formatAverage(avg)}</td>
                     <td className="px-5 py-3 align-top">
