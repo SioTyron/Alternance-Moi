@@ -1,6 +1,6 @@
 // app/notes/page.tsx
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import {
@@ -17,6 +17,7 @@ type FormationForm = { name: string; school: string; level: string; academic_yea
 const EMPTY_FORMATION: FormationForm = { name: '', school: '', level: '', academic_year: '' };
 type GradeInput = { value: string; coefficient: string; label: string };
 const EMPTY_GRADE: GradeInput = { value: '', coefficient: '', label: '' };
+type ViewMode = 'cards' | 'list' | 'table';
 
 export default function NotesPage() {
   const router = useRouter();
@@ -26,7 +27,6 @@ export default function NotesPage() {
   const [selectedId, setSelectedId] = useState<string>('');
   const [ues, setUes] = useState<UE[]>([]);
 
-  // Formulaires
   const [showFormationForm, setShowFormationForm] = useState(false);
   const [editingFormation, setEditingFormation] = useState(false);
   const [formationForm, setFormationForm] = useState<FormationForm>(EMPTY_FORMATION);
@@ -34,8 +34,27 @@ export default function NotesPage() {
   const [gradeInputs, setGradeInputs] = useState<Record<string, GradeInput>>({});
   const [busy, setBusy] = useState(false);
 
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
   const selectedFormation = formations.find((f) => f.id === selectedId) || null;
   const overall = overallAverage(ues);
+
+  // Vue mémorisée par navigateur
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('notes_view') as ViewMode | null;
+      if (saved === 'cards' || saved === 'list' || saved === 'table') setViewMode(saved);
+    } catch { /* ignore */ }
+  }, []);
+
+  const changeView = (mode: ViewMode) => {
+    setViewMode(mode);
+    try { localStorage.setItem('notes_view', mode); } catch { /* ignore */ }
+  };
+
+  const toggleExpand = (ueId: string) =>
+    setExpanded((prev) => ({ ...prev, [ueId]: !prev[ueId] }));
 
   // ---- Chargement initial -------------------------------------------
   useEffect(() => {
@@ -185,34 +204,178 @@ export default function NotesPage() {
 
     const { data } = await supabase
       .from('grades')
-      .insert({
-        ue_id: ueId,
-        user_id: userId,
-        value,
-        coefficient,
-        label: input.label.trim() || null,
-      })
+      .insert({ ue_id: ueId, user_id: userId, value, coefficient, label: input.label.trim() || null })
       .select('id, ue_id, label, value, coefficient')
       .single();
 
     if (data) {
-      setUes((prev) =>
-        prev.map((u) =>
-          u.id === ueId ? { ...u, grades: [...u.grades, data as Grade] } : u
-        )
-      );
+      setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: [...u.grades, data as Grade] } : u)));
       setGradeInputs((prev) => ({ ...prev, [ueId]: EMPTY_GRADE }));
     }
   };
 
   const deleteGrade = async (ueId: string, gradeId: string) => {
     await supabase.from('grades').delete().eq('id', gradeId);
-    setUes((prev) =>
-      prev.map((u) =>
-        u.id === ueId ? { ...u, grades: u.grades.filter((g) => g.id !== gradeId) } : u
-      )
+    setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: u.grades.filter((g) => g.id !== gradeId) } : u)));
+  };
+
+  const fmtCoef = (c: number) => (Number(c) === 1 ? '' : ` · coef ${Number(c)}`);
+
+  // ---- Blocs réutilisables ------------------------------------------
+  const gradeChips = (ue: UE) =>
+    ue.grades.length > 0 ? (
+      <div className="flex flex-wrap gap-2">
+        {ue.grades.map((g) => (
+          <span key={g.id} className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-2 py-1.5 text-sm">
+            <span className="font-semibold text-slate-800">{Number(g.value)}</span>
+            <span className="text-slate-400">/20</span>
+            {g.label && <span className="text-slate-500">· {g.label}</span>}
+            <span className="text-slate-400">{fmtCoef(g.coefficient)}</span>
+            <button onClick={() => deleteGrade(ue.id, g.id)} className="ml-1 text-slate-300 hover:text-red-500" title="Supprimer la note">
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </span>
+        ))}
+      </div>
+    ) : (
+      <p className="text-sm text-slate-400">Aucune note pour cette UE.</p>
+    );
+
+  const addGradeForm = (ue: UE) => {
+    const input = gradeInputs[ue.id] || EMPTY_GRADE;
+    return (
+      <form onSubmit={(e) => addGrade(e, ue.id)} className="flex flex-wrap items-end gap-2">
+        <div>
+          <label className="block text-[11px] font-medium text-slate-500 mb-1">Note /20 *</label>
+          <input type="number" step="0.01" min="0" max="20" required value={input.value} onChange={(e) => setGradeInput(ue.id, { value: e.target.value })} placeholder="14.5" className="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+        </div>
+        <div>
+          <label className="block text-[11px] font-medium text-slate-500 mb-1">Coef.</label>
+          <input type="number" step="0.01" min="0" value={input.coefficient} onChange={(e) => setGradeInput(ue.id, { coefficient: e.target.value })} placeholder="1" className="w-20 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+        </div>
+        <div className="flex-1 min-w-[120px]">
+          <label className="block text-[11px] font-medium text-slate-500 mb-1">Libellé (optionnel)</label>
+          <input type="text" value={input.label} onChange={(e) => setGradeInput(ue.id, { label: e.target.value })} placeholder="Ex. DS1" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+        </div>
+        <button type="submit" className="btn btn-primary px-4 py-2 text-sm">Ajouter</button>
+      </form>
     );
   };
+
+  const ueAvgBadge = (avg: number | null, sub = 'moyenne UE') => (
+    <div className="text-right">
+      <div className={`text-xl font-bold ${averageColor(avg)}`}>{formatAverage(avg)}</div>
+      <div className="text-[11px] text-slate-400 -mt-0.5">{sub}</div>
+    </div>
+  );
+
+  const trashBtn = (onClick: () => void, title: string) => (
+    <button onClick={onClick} className="text-slate-300 hover:text-red-500 transition-colors p-1" title={title}>
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+      </svg>
+    </button>
+  );
+
+  // ---- Vues ----------------------------------------------------------
+  const renderCards = () =>
+    ues.map((ue) => (
+      <div key={ue.id} className="card p-6 animate-in">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white flex-shrink-0">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+            </div>
+            <h3 className="text-lg font-semibold text-slate-900">{ue.name}</h3>
+          </div>
+          <div className="flex items-center gap-3">
+            {ueAvgBadge(ueAverage(ue.grades))}
+            {trashBtn(() => deleteUe(ue.id), "Supprimer l'UE")}
+          </div>
+        </div>
+        <div className="mb-4">{gradeChips(ue)}</div>
+        <div className="pt-3 border-t border-slate-100">{addGradeForm(ue)}</div>
+      </div>
+    ));
+
+  const renderList = () => (
+    <div className="card divide-y divide-slate-100 animate-in overflow-hidden">
+      {ues.map((ue) => {
+        const avg = ueAverage(ue.grades);
+        const open = !!expanded[ue.id];
+        return (
+          <div key={ue.id}>
+            <button onClick={() => toggleExpand(ue.id)} className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-slate-50 transition-colors">
+              <div className="flex items-center gap-3 min-w-0">
+                <svg className={`h-4 w-4 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                <span className="font-medium text-slate-900 truncate">{ue.name}</span>
+                <span className="text-xs text-slate-400 flex-shrink-0">{ue.grades.length} note{ue.grades.length > 1 ? 's' : ''}</span>
+              </div>
+              <span className={`text-lg font-bold flex-shrink-0 ${averageColor(avg)}`}>{formatAverage(avg)}</span>
+            </button>
+            {open && (
+              <div className="px-5 pb-5 space-y-4 bg-slate-50/50">
+                {gradeChips(ue)}
+                <div className="pt-3 border-t border-slate-100">{addGradeForm(ue)}</div>
+                <button onClick={() => deleteUe(ue.id)} className="text-sm text-red-500 hover:text-red-600 font-medium">Supprimer l&apos;UE</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderTable = () => (
+    <div className="card overflow-hidden animate-in">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-50 text-slate-500 text-left text-xs uppercase tracking-wide">
+              <th className="px-5 py-3 font-medium">Unité d&apos;enseignement</th>
+              <th className="px-5 py-3 font-medium">Notes</th>
+              <th className="px-5 py-3 font-medium text-right">Moyenne</th>
+              <th className="px-5 py-3 font-medium text-right w-24">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {ues.map((ue) => {
+              const avg = ueAverage(ue.grades);
+              const open = !!expanded[ue.id];
+              return (
+                <Fragment key={ue.id}>
+                  <tr className="hover:bg-slate-50/60">
+                    <td className="px-5 py-3 font-medium text-slate-900 align-top">{ue.name}</td>
+                    <td className="px-5 py-3 align-top">{gradeChips(ue)}</td>
+                    <td className={`px-5 py-3 text-right font-bold align-top ${averageColor(avg)}`}>{formatAverage(avg)}</td>
+                    <td className="px-5 py-3 align-top">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => toggleExpand(ue.id)} className="text-blue-600 hover:text-blue-700 p-1" title="Ajouter une note">
+                          <svg className={`h-5 w-5 transition-transform ${open ? 'rotate-45' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        </button>
+                        {trashBtn(() => deleteUe(ue.id), "Supprimer l'UE")}
+                      </div>
+                    </td>
+                  </tr>
+                  {open && (
+                    <tr className="bg-slate-50/60">
+                      <td colSpan={4} className="px-5 py-4">{addGradeForm(ue)}</td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const viewButtons: { mode: ViewMode; label: string; icon: React.ReactNode }[] = [
+    { mode: 'cards', label: 'Cartes', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h5a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM13 5a1 1 0 011-1h5a1 1 0 011 1v5a1 1 0 01-1 1h-5a1 1 0 01-1-1V5zM4 14a1 1 0 011-1h5a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1v-5zM13 14a1 1 0 011-1h5a1 1 0 011 1v5a1 1 0 01-1 1h-5a1 1 0 01-1-1v-5z" /> },
+    { mode: 'list', label: 'Liste', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /> },
+    { mode: 'table', label: 'Tableau', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-8v16M4 4h16a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z" /> },
+  ];
 
   // ---- Rendu ---------------------------------------------------------
   if (loading) {
@@ -226,8 +389,6 @@ export default function NotesPage() {
     );
   }
 
-  const fmtCoef = (c: number) => (Number(c) === 1 ? '' : ` · coef ${Number(c)}`);
-
   return (
     <div className="min-h-screen app-bg py-8 px-4">
       <div className="max-w-3xl mx-auto">
@@ -238,7 +399,6 @@ export default function NotesPage() {
         </div>
 
         {formations.length === 0 && !showFormationForm ? (
-          /* Aucune formation */
           <div className="card p-8 text-center animate-in">
             <div className="h-16 w-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/30">
               <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -260,22 +420,10 @@ export default function NotesPage() {
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-slate-500 mb-1">Formation</label>
                   <div className="flex items-center gap-2">
-                    <select
-                      value={selectedId}
-                      onChange={(e) => selectFormation(e.target.value)}
-                      className="flex-1 px-3 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-900"
-                    >
-                      {formations.map((f) => (
-                        <option key={f.id} value={f.id}>{f.name}</option>
-                      ))}
+                    <select value={selectedId} onChange={(e) => selectFormation(e.target.value)} className="flex-1 px-3 py-2.5 border border-slate-300 rounded-lg bg-white text-slate-900">
+                      {formations.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
                     </select>
-                    <button
-                      onClick={() => { setFormationForm(EMPTY_FORMATION); setShowFormationForm(true); setEditingFormation(false); }}
-                      className="btn px-3 py-2.5 text-sm border border-slate-300 text-slate-700 hover:bg-slate-100"
-                      title="Nouvelle formation"
-                    >
-                      + Formation
-                    </button>
+                    <button onClick={() => { setFormationForm(EMPTY_FORMATION); setShowFormationForm(true); setEditingFormation(false); }} className="btn px-3 py-2.5 text-sm border border-slate-300 text-slate-700 hover:bg-slate-100" title="Nouvelle formation">+ Formation</button>
                   </div>
                   {selectedFormation && (
                     <div className="mt-2 text-sm text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
@@ -287,8 +435,6 @@ export default function NotesPage() {
                     </div>
                   )}
                 </div>
-
-                {/* Moyenne générale */}
                 <div className="text-center bg-slate-50 rounded-xl px-6 py-4 border border-slate-100">
                   <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Moyenne générale</div>
                   <div className={`text-3xl font-bold ${averageColor(overall)}`}>{formatAverage(overall)}</div>
@@ -297,12 +443,10 @@ export default function NotesPage() {
               </div>
             </div>
 
-            {/* Formulaire formation (création / édition) */}
+            {/* Formulaire formation */}
             {(showFormationForm || editingFormation) && (
               <form onSubmit={saveFormation} className="card p-6 animate-in space-y-4">
-                <h3 className="font-semibold text-slate-900">
-                  {editingFormation ? 'Modifier la formation' : 'Nouvelle formation'}
-                </h3>
+                <h3 className="font-semibold text-slate-900">{editingFormation ? 'Modifier la formation' : 'Nouvelle formation'}</h3>
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-slate-700 mb-1">Nom de la formation *</label>
@@ -322,84 +466,41 @@ export default function NotesPage() {
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <button type="submit" disabled={busy} className="btn btn-primary py-2.5 px-5">
-                    {editingFormation ? 'Enregistrer' : 'Créer'}
-                  </button>
-                  <button type="button" onClick={() => { setShowFormationForm(false); setEditingFormation(false); setFormationForm(EMPTY_FORMATION); }} className="btn py-2.5 px-5 border border-slate-300 text-slate-700 hover:bg-slate-100">
-                    Annuler
-                  </button>
+                  <button type="submit" disabled={busy} className="btn btn-primary py-2.5 px-5">{editingFormation ? 'Enregistrer' : 'Créer'}</button>
+                  <button type="button" onClick={() => { setShowFormationForm(false); setEditingFormation(false); setFormationForm(EMPTY_FORMATION); }} className="btn py-2.5 px-5 border border-slate-300 text-slate-700 hover:bg-slate-100">Annuler</button>
                 </div>
               </form>
             )}
 
-            {/* Liste des UE */}
+            {/* Sélecteur de vue + liste des UE */}
             {selectedId && !showFormationForm && (
               <>
-                {ues.map((ue) => {
-                  const avg = ueAverage(ue.grades);
-                  const input = gradeInputs[ue.id] || EMPTY_GRADE;
-                  return (
-                    <div key={ue.id} className="card p-6 animate-in">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white flex-shrink-0">
-                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                            </svg>
-                          </div>
-                          <h3 className="text-lg font-semibold text-slate-900">{ue.name}</h3>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <div className={`text-xl font-bold ${averageColor(avg)}`}>{formatAverage(avg)}</div>
-                            <div className="text-[11px] text-slate-400 -mt-0.5">moyenne UE</div>
-                          </div>
-                          <button onClick={() => deleteUe(ue.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1" title="Supprimer l'UE">
-                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Notes */}
-                      {ue.grades.length > 0 ? (
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          {ue.grades.map((g) => (
-                            <span key={g.id} className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-2 py-1.5 text-sm">
-                              <span className="font-semibold text-slate-800">{Number(g.value)}</span>
-                              <span className="text-slate-400">/20</span>
-                              {g.label && <span className="text-slate-500">· {g.label}</span>}
-                              <span className="text-slate-400">{fmtCoef(g.coefficient)}</span>
-                              <button onClick={() => deleteGrade(ue.id, g.id)} className="ml-1 text-slate-300 hover:text-red-500" title="Supprimer la note">
-                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-slate-400 mb-4">Aucune note pour cette UE.</p>
-                      )}
-
-                      {/* Ajout d'une note */}
-                      <form onSubmit={(e) => addGrade(e, ue.id)} className="flex flex-wrap items-end gap-2 pt-3 border-t border-slate-100">
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-500 mb-1">Note /20 *</label>
-                          <input type="number" step="0.01" min="0" max="20" required value={input.value} onChange={(e) => setGradeInput(ue.id, { value: e.target.value })} placeholder="14.5" className="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-500 mb-1">Coef.</label>
-                          <input type="number" step="0.01" min="0" value={input.coefficient} onChange={(e) => setGradeInput(ue.id, { coefficient: e.target.value })} placeholder="1" className="w-20 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                        </div>
-                        <div className="flex-1 min-w-[120px]">
-                          <label className="block text-[11px] font-medium text-slate-500 mb-1">Libellé (optionnel)</label>
-                          <input type="text" value={input.label} onChange={(e) => setGradeInput(ue.id, { label: e.target.value })} placeholder="Ex. DS1" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
-                        </div>
-                        <button type="submit" className="btn btn-primary px-4 py-2 text-sm">Ajouter</button>
-                      </form>
+                {ues.length > 0 && (
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <span className="text-sm text-slate-500">{ues.length} UE</span>
+                    <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                      {viewButtons.map((v) => (
+                        <button
+                          key={v.mode}
+                          onClick={() => changeView(v.mode)}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                            viewMode === v.mode ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                          title={v.label}
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">{v.icon}</svg>
+                          <span className="hidden sm:inline">{v.label}</span>
+                        </button>
+                      ))}
                     </div>
-                  );
-                })}
+                  </div>
+                )}
+
+                {ues.length > 0 && (
+                  viewMode === 'cards' ? <div className="space-y-6">{renderCards()}</div>
+                  : viewMode === 'list' ? renderList()
+                  : renderTable()
+                )}
 
                 {/* Ajout d'une UE */}
                 <form onSubmit={addUe} className="card p-5 animate-in flex flex-wrap items-end gap-3">
