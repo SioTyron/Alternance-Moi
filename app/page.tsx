@@ -6,19 +6,37 @@ import Link from 'next/link';
 
 export default function HomePage() {
   const [session, setSession] = useState<any>(null);
+  const [firstName, setFirstName] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const getSession = async () => {
+    const fetchProfileName = async (currentSession: any) => {
+      if (!currentSession) {
+        setFirstName('');
+        return;
+      }
+      const { data } = await supabase
+        .from('profiles')
+        .select('first_name')
+        .eq('id', currentSession.user.id)
+        .maybeSingle();
+      // Prénom du profil, sinon repli sur le début de l'email
+      const fallback = currentSession.user.email?.split('@')[0] ?? '';
+      setFirstName(data?.first_name?.trim() || fallback);
+    };
+
+    const init = async () => {
       const { data } = await supabase.auth.getSession();
       setSession(data.session);
+      await fetchProfileName(data.session);
       setLoading(false);
     };
 
-    getSession();
+    init();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      fetchProfileName(session);
       setLoading(false);
     });
 
@@ -35,8 +53,6 @@ export default function HomePage() {
       </div>
     );
   }
-
-  const firstName = session?.user?.email ? session.user.email.split('@')[0] : '';
 
   return (
     <div className="min-h-screen app-bg">
