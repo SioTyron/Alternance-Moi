@@ -3,6 +3,7 @@
 import { useEffect, useState, Fragment } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/components/Toast';
 import {
   Formation,
   UE,
@@ -21,6 +22,7 @@ type ViewMode = 'cards' | 'list' | 'table';
 
 export default function NotesPage() {
   const router = useRouter();
+  const toast = useToast();
   const [userId, setUserId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [formations, setFormations] = useState<Formation[]>([]);
@@ -123,6 +125,7 @@ export default function NotesPage() {
         .single();
       if (data) setFormations((prev) => prev.map((f) => (f.id === data.id ? (data as Formation) : f)));
       setEditingFormation(false);
+      toast.success('Formation mise à jour');
     } else {
       const { data } = await supabase
         .from('formations')
@@ -135,6 +138,7 @@ export default function NotesPage() {
         setUes([]);
       }
       setShowFormationForm(false);
+      toast.success('Formation créée 🎓');
     }
     setFormationForm(EMPTY_FORMATION);
     setBusy(false);
@@ -154,6 +158,7 @@ export default function NotesPage() {
       setSelectedId('');
       setUes([]);
     }
+    toast.success('Formation supprimée');
     setBusy(false);
   };
 
@@ -179,7 +184,10 @@ export default function NotesPage() {
       .insert({ formation_id: selectedId, user_id: userId, name: newUeName.trim() })
       .select('id, formation_id, name')
       .single();
-    if (data) setUes((prev) => [...prev, { ...(data as UE), grades: [] }]);
+    if (data) {
+      setUes((prev) => [...prev, { ...(data as UE), grades: [] }]);
+      toast.success('UE ajoutée');
+    }
     setNewUeName('');
     setBusy(false);
   };
@@ -188,6 +196,7 @@ export default function NotesPage() {
     if (!confirm('Supprimer cette UE et ses notes ?')) return;
     await supabase.from('ues').delete().eq('id', ueId);
     setUes((prev) => prev.filter((u) => u.id !== ueId));
+    toast.success('UE supprimée');
   };
 
   const startEditUe = (ue: UE) => {
@@ -207,6 +216,7 @@ export default function NotesPage() {
     await supabase.from('ues').update({ name }).eq('id', ueId);
     setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, name } : u)));
     cancelEditUe();
+    toast.success('UE renommée');
   };
 
   // ---- Notes ---------------------------------------------------------
@@ -219,7 +229,7 @@ export default function NotesPage() {
     const input = gradeInputs[ueId] || EMPTY_GRADE;
     const value = parseFloat(input.value.replace(',', '.'));
     if (isNaN(value) || value < 0 || value > 20) {
-      alert('La note doit être un nombre entre 0 et 20.');
+      toast.error('La note doit être un nombre entre 0 et 20.');
       return;
     }
     let coefficient = parseFloat((input.coefficient || '1').replace(',', '.'));
@@ -234,6 +244,7 @@ export default function NotesPage() {
     if (data) {
       setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: [...u.grades, data as Grade] } : u)));
       setGradeInputs((prev) => ({ ...prev, [ueId]: EMPTY_GRADE }));
+      toast.success('Note ajoutée');
     }
   };
 
@@ -261,7 +272,7 @@ export default function NotesPage() {
     if (!editingGradeId) return;
     const value = parseFloat(editGrade.value.replace(',', '.'));
     if (isNaN(value) || value < 0 || value > 20) {
-      alert('La note doit être un nombre entre 0 et 20.');
+      toast.error('La note doit être un nombre entre 0 et 20.');
       return;
     }
     let coefficient = parseFloat((editGrade.coefficient || '1').replace(',', '.'));
@@ -276,6 +287,7 @@ export default function NotesPage() {
 
     if (data) {
       setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: u.grades.map((g) => (g.id === data.id ? (data as Grade) : g)) } : u)));
+      toast.success('Note modifiée');
     }
     cancelEditGrade();
   };

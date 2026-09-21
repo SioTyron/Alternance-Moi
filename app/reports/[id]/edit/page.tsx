@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter, useParams } from 'next/navigation';
+import { useToast } from '@/components/Toast';
 
 const ALLOWED_MIME_TYPES = [
   'image/png', 'image/jpeg', 'image/gif', 'image/webp',
@@ -16,6 +17,7 @@ const MAX_CONTENT_LENGTH = 10000;
 
 export default function EditReportPage() {
   const router = useRouter();
+  const toast = useToast();
   const params = useParams();
   const reportId = params.id as string;
 
@@ -23,6 +25,7 @@ export default function EditReportPage() {
   const [content, setContent] = useState('');
   const [date, setDate] = useState('');
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [files, setFiles] = useState<File[]>([]);
   const [existingAttachments, setExistingAttachments] = useState<any[]>([]);
@@ -83,11 +86,11 @@ export default function EditReportPage() {
 
       const validFiles = newFiles.filter(file => {
         if (file.size > MAX_FILE_SIZE) {
-          alert(`Le fichier ${file.name} est trop volumineux. Taille max: 10MB`);
+          toast.error(`« ${file.name} » est trop volumineux (max 10 Mo).`);
           return false;
         }
         if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-          alert(`Le type de fichier ${file.name} n'est pas autorisé.`);
+          toast.error(`Le type de « ${file.name} » n'est pas autorisé.`);
           return false;
         }
         return true;
@@ -120,7 +123,7 @@ export default function EditReportPage() {
       setExistingAttachments(updatedAttachments);
     } catch (error) {
       console.error('Error removing attachment:', error);
-      alert('Erreur lors de la suppression du fichier');
+      toast.error('Erreur lors de la suppression du fichier');
     }
   };
 
@@ -205,12 +208,13 @@ export default function EditReportPage() {
         throw new Error('Aucune donnée retournée après mise à jour');
       }
 
-      router.push('/reports');
-      
+      setDone(true);
+      toast.success('Rapport mis à jour ✅');
+      setTimeout(() => router.push('/reports'), 900);
     } catch (error: any) {
       console.error('Erreur complète lors de la mise à jour:', error);
       setErrorMessage(error.message || 'Une erreur inattendue est survenue');
-    } finally {
+      toast.error('Erreur lors de la mise à jour du rapport');
       setLoading(false);
     }
   };
@@ -451,10 +455,21 @@ export default function EditReportPage() {
               
               <button
                 type="submit"
-                disabled={loading}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
+                disabled={loading || done}
+                className={`flex-1 text-white font-medium py-3 px-6 rounded-lg transition-all duration-300 transform disabled:cursor-not-allowed ${
+                  done
+                    ? 'bg-green-600'
+                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:scale-[1.02] disabled:opacity-50'
+                }`}
               >
-                {loading ? (
+                {done ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path className="draw-check" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Enregistré !
+                  </div>
+                ) : loading ? (
                   <div className="flex items-center justify-center">
                     <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

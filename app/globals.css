@@ -146,6 +146,28 @@ input[type="checkbox"], input[type="radio"], input[type="date"] { accent-color: 
 }
 .animate-in { animation: fadeInUp .5s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* Toasts */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(14px) scale(.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.toast-in { animation: toastIn .32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Pop de succès (badge / coche) */
+@keyframes popIn {
+  0%   { opacity: 0; transform: scale(.4); }
+  60%  { opacity: 1; transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.pop-in { animation: popIn .45s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Tracé de la coche */
+@keyframes drawCheck {
+  from { stroke-dashoffset: 28; }
+  to   { stroke-dashoffset: 0; }
+}
+.draw-check { stroke-dasharray: 28; animation: drawCheck .5s .12s ease-out both; }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .animate-in { animation: none; }

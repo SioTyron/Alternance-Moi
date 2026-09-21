@@ -5,9 +5,11 @@ import { supabase } from '@/lib/supabaseClient';
 import { exportAllReportsToPDF } from '@/lib/exportReports';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/components/Toast';
 
 export default function ReportsPage() {
   const router = useRouter();
+  const toast = useToast();
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<any>(null);
@@ -151,9 +153,10 @@ export default function ReportsPage() {
     setExporting(true);
     try {
       await exportAllReportsToPDF(reports);
+      toast.success('Export PDF généré 📄');
     } catch (error) {
       console.error('Error exporting reports:', error);
-      alert("Erreur lors de l'export PDF des rapports");
+      toast.error("Erreur lors de l'export PDF des rapports");
     } finally {
       setExporting(false);
     }
@@ -184,9 +187,10 @@ export default function ReportsPage() {
 
       // Mettre à jour l'état local
       setReports(reports.filter(report => report.id !== reportId));
+      toast.success('Rapport supprimé');
     } catch (error) {
       console.error('Error deleting report:', error);
-      alert('Erreur lors de la suppression du rapport');
+      toast.error('Erreur lors de la suppression du rapport');
     } finally {
       setDeletingId(null);
     }
