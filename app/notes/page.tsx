@@ -9,10 +9,12 @@ import EmptyState from '@/components/EmptyState';
 import Sparkline from '@/components/Sparkline';
 import {
   Formation,
+  Semester,
   UE,
   Grade,
   ueAverage,
   overallAverage,
+  annualAverage,
   runningAverages,
   formatAverage,
   averageColor,
@@ -28,30 +30,35 @@ export default function NotesPage() {
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
+
   const [userId, setUserId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [formations, setFormations] = useState<Formation[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
+  const [semesters, setSemesters] = useState<Semester[]>([]);
   const [ues, setUes] = useState<UE[]>([]);
 
   const [showFormationForm, setShowFormationForm] = useState(false);
   const [editingFormation, setEditingFormation] = useState(false);
   const [formationForm, setFormationForm] = useState<FormationForm>(EMPTY_FORMATION);
-  const [newUeName, setNewUeName] = useState('');
+  const [newUeInputs, setNewUeInputs] = useState<Record<string, string>>({});
   const [gradeInputs, setGradeInputs] = useState<Record<string, GradeInput>>({});
   const [editingGradeId, setEditingGradeId] = useState<string | null>(null);
   const [editGrade, setEditGrade] = useState<GradeInput>(EMPTY_GRADE);
   const [editingUeId, setEditingUeId] = useState<string | null>(null);
   const [editUeName, setEditUeName] = useState('');
+  const [editingSemesterId, setEditingSemesterId] = useState<string | null>(null);
+  const [editSemesterName, setEditSemesterName] = useState('');
   const [busy, setBusy] = useState(false);
 
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const selectedFormation = formations.find((f) => f.id === selectedId) || null;
-  const overall = overallAverage(ues);
+  const semUes = (semesterId: string) => ues.filter((u) => u.semester_id === semesterId);
+  const semesterAverage = (semesterId: string) => overallAverage(semUes(semesterId));
+  const annual = annualAverage(semesters.map((s) => semesterAverage(s.id)));
 
-  // Vue mémorisée par navigateur
   useEffect(() => {
     try {
       const saved = localStorage.getItem('notes_view') as ViewMode | null;
@@ -64,10 +71,9 @@ export default function NotesPage() {
     try { localStorage.setItem('notes_view', mode); } catch { /* ignore */ }
   };
 
-  const toggleExpand = (ueId: string) =>
-    setExpanded((prev) => ({ ...prev, [ueId]: !prev[ueId] }));
+  const toggleExpand = (ueId: string) => setExpanded((prev) => ({ ...prev, [ueId]: !prev[ueId] }));
 
-  // ---- Chargement initial -------------------------------------------
+  // ---- Chargement ----------------------------------------------------
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -75,7 +81,8 @@ export default function NotesPage() {
         router.push('/login');
         return;
       }
-      setUserId(session.user.id);
+      const uid = session.user.id;
+      setUserId(uid);
 
       const { data } = await supabase
         .from('formations')
@@ -86,7 +93,7 @@ export default function NotesPage() {
       setFormations(list);
       if (list.length > 0) {
         setSelectedId(list[0].id);
-        await loadUes(list[0].id);
+        await loadFormationData(list[0].id, uid);
       }
       setLoading(false);
     };
@@ -94,19 +101,30 @@ export default function NotesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  const loadUes = async (formationId: string) => {
-    const { data } = await supabase
-      .from('ues')
-      .select('id, formation_id, name, grades(id, ue_id, label, value, coefficient, created_at)')
-      .eq('formation_id', formationId)
-      .order('created_at', { ascending: true });
-    setUes((data as UE[]) || []);
+  const loadFormationData = async (formationId: string, uid: string) => {
+    const [semRes, ueRes] = await Promise.all([
+      supabase.from('semesters').select('id, formation_id, name, position').eq('formation_id', formationId).order('position', { ascending: true }),
+      supabase.from('ues').select('id, formation_id, semester_id, name, grades(id, ue_id, label, value, coefficient, created_at)').eq('formation_id', formationId).order('created_at', { ascending: true }),
+    ]);
+
+    let sems = (semRes.data as Semester[]) || [];
+    // Toute formation doit avoir au moins un semestre
+    if (sems.length === 0) {
+      const { data: created } = await supabase
+        .from('semesters')
+        .insert({ formation_id: formationId, user_id: uid, name: 'Semestre 1', position: 1 })
+        .select('id, formation_id, name, position')
+        .single();
+      if (created) sems = [created as Semester];
+    }
+    setSemesters(sems);
+    setUes((ueRes.data as UE[]) || []);
   };
 
   const selectFormation = async (id: string) => {
     setSelectedId(id);
     setEditingFormation(false);
-    await loadUes(id);
+    await loadFormationData(id, userId);
   };
 
   // ---- Formations ---------------------------------------------------
@@ -122,25 +140,16 @@ export default function NotesPage() {
     };
 
     if (editingFormation && selectedId) {
-      const { data } = await supabase
-        .from('formations')
-        .update(payload)
-        .eq('id', selectedId)
-        .select('id, name, school, level, academic_year')
-        .single();
+      const { data } = await supabase.from('formations').update(payload).eq('id', selectedId).select('id, name, school, level, academic_year').single();
       if (data) setFormations((prev) => prev.map((f) => (f.id === data.id ? (data as Formation) : f)));
       setEditingFormation(false);
       toast.success('Formation mise à jour');
     } else {
-      const { data } = await supabase
-        .from('formations')
-        .insert({ ...payload, user_id: userId })
-        .select('id, name, school, level, academic_year')
-        .single();
+      const { data } = await supabase.from('formations').insert({ ...payload, user_id: userId }).select('id, name, school, level, academic_year').single();
       if (data) {
         setFormations((prev) => [...prev, data as Formation]);
         setSelectedId(data.id);
-        setUes([]);
+        await loadFormationData(data.id, userId);
       }
       setShowFormationForm(false);
       toast.success('Formation créée 🎓');
@@ -153,7 +162,7 @@ export default function NotesPage() {
     if (!selectedFormation) return;
     const ok = await confirm({
       title: 'Supprimer la formation',
-      message: `« ${selectedFormation.name} » et toutes ses UE et notes seront supprimées définitivement.`,
+      message: `« ${selectedFormation.name} » et tous ses semestres, UE et notes seront supprimés définitivement.`,
       confirmLabel: 'Supprimer',
       danger: true,
     });
@@ -167,6 +176,7 @@ export default function NotesPage() {
       await selectFormation(remaining[0].id);
     } else {
       setSelectedId('');
+      setSemesters([]);
       setUes([]);
     }
     toast.success('Formation supprimée');
@@ -185,22 +195,73 @@ export default function NotesPage() {
     setShowFormationForm(false);
   };
 
-  // ---- UE ------------------------------------------------------------
-  const addUe = async (e: React.FormEvent) => {
+  // ---- Semestres -----------------------------------------------------
+  const addSemester = async () => {
+    if (!selectedId) return;
+    const position = semesters.length + 1;
+    const { data } = await supabase
+      .from('semesters')
+      .insert({ formation_id: selectedId, user_id: userId, name: `Semestre ${position}`, position })
+      .select('id, formation_id, name, position')
+      .single();
+    if (data) {
+      setSemesters((prev) => [...prev, data as Semester]);
+      toast.success('Semestre ajouté');
+    }
+  };
+
+  const startEditSemester = (s: Semester) => {
+    setEditingSemesterId(s.id);
+    setEditSemesterName(s.name);
+  };
+
+  const saveEditSemester = async (e: React.FormEvent, semesterId: string) => {
     e.preventDefault();
-    if (!newUeName.trim() || !selectedId) return;
-    setBusy(true);
+    const name = editSemesterName.trim();
+    if (!name) return;
+    await supabase.from('semesters').update({ name }).eq('id', semesterId);
+    setSemesters((prev) => prev.map((s) => (s.id === semesterId ? { ...s, name } : s)));
+    setEditingSemesterId(null);
+    setEditSemesterName('');
+    toast.success('Semestre renommé');
+  };
+
+  const deleteSemester = async (semesterId: string) => {
+    if (semesters.length <= 1) {
+      toast.error('Une formation doit garder au moins un semestre.');
+      return;
+    }
+    const ok = await confirm({
+      title: 'Supprimer le semestre',
+      message: 'Ce semestre, ses UE et toutes leurs notes seront supprimés.',
+      confirmLabel: 'Supprimer',
+      danger: true,
+    });
+    if (!ok) return;
+    await supabase.from('semesters').delete().eq('id', semesterId);
+    setSemesters((prev) => prev.filter((s) => s.id !== semesterId));
+    setUes((prev) => prev.filter((u) => u.semester_id !== semesterId));
+    toast.success('Semestre supprimé');
+  };
+
+  // ---- UE ------------------------------------------------------------
+  const setNewUeInput = (semesterId: string, value: string) =>
+    setNewUeInputs((prev) => ({ ...prev, [semesterId]: value }));
+
+  const addUe = async (e: React.FormEvent, semesterId: string) => {
+    e.preventDefault();
+    const name = (newUeInputs[semesterId] || '').trim();
+    if (!name || !selectedId) return;
     const { data } = await supabase
       .from('ues')
-      .insert({ formation_id: selectedId, user_id: userId, name: newUeName.trim() })
-      .select('id, formation_id, name')
+      .insert({ formation_id: selectedId, semester_id: semesterId, user_id: userId, name })
+      .select('id, formation_id, semester_id, name')
       .single();
     if (data) {
       setUes((prev) => [...prev, { ...(data as UE), grades: [] }]);
+      setNewUeInputs((prev) => ({ ...prev, [semesterId]: '' }));
       toast.success('UE ajoutée');
     }
-    setNewUeName('');
-    setBusy(false);
   };
 
   const deleteUe = async (ueId: string) => {
@@ -265,25 +326,6 @@ export default function NotesPage() {
     }
   };
 
-  const deleteGrade = async (ueId: string, grade: Grade) => {
-    // Suppression optimiste + possibilité d'annuler
-    setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: u.grades.filter((g) => g.id !== grade.id) } : u)));
-    await supabase.from('grades').delete().eq('id', grade.id);
-    toast.info('Note supprimée', {
-      action: {
-        label: 'Annuler',
-        onClick: async () => {
-          const { data } = await supabase
-            .from('grades')
-            .insert({ ue_id: grade.ue_id, user_id: userId, value: grade.value, coefficient: grade.coefficient, label: grade.label })
-            .select('id, ue_id, label, value, coefficient, created_at')
-            .single();
-          if (data) setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: [...u.grades, data as Grade] } : u)));
-        },
-      },
-    });
-  };
-
   const startEditGrade = (g: Grade) => {
     setEditingGradeId(g.id);
     setEditGrade({
@@ -323,9 +365,30 @@ export default function NotesPage() {
     cancelEditGrade();
   };
 
+  const deleteGrade = async (ueId: string, grade: Grade) => {
+    setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: u.grades.filter((g) => g.id !== grade.id) } : u)));
+    await supabase.from('grades').delete().eq('id', grade.id);
+    toast.info('Note supprimée', {
+      action: {
+        label: 'Annuler',
+        onClick: async () => {
+          const { data } = await supabase
+            .from('grades')
+            .insert({ ue_id: grade.ue_id, user_id: userId, value: grade.value, coefficient: grade.coefficient, label: grade.label })
+            .select('id, ue_id, label, value, coefficient, created_at')
+            .single();
+          if (data) setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: [...u.grades, data as Grade] } : u)));
+        },
+      },
+    });
+  };
+
   const fmtCoef = (c: number) => (Number(c) === 1 ? '' : ` · coef ${Number(c)}`);
 
   // ---- Blocs réutilisables ------------------------------------------
+  const sparkline = (ue: UE, w = 132, h = 40) =>
+    ue.grades.length >= 2 ? <Sparkline data={runningAverages(ue.grades)} width={w} height={h} /> : null;
+
   const gradeChips = (ue: UE) =>
     ue.grades.length > 0 ? (
       <div className="flex flex-wrap gap-2">
@@ -401,13 +464,6 @@ export default function NotesPage() {
     </button>
   );
 
-  const ueAvgBadge = (avg: number | null, sub = 'moyenne UE') => (
-    <div className="text-right">
-      <div className={`text-xl font-bold ${averageColor(avg)}`}>{formatAverage(avg)}</div>
-      <div className="text-[11px] text-slate-400 -mt-0.5">{sub}</div>
-    </div>
-  );
-
   const trashBtn = (onClick: () => void, title: string) => (
     <button onClick={onClick} className="text-slate-300 hover:text-red-500 transition-colors p-1" title={title}>
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -416,41 +472,47 @@ export default function NotesPage() {
     </button>
   );
 
-  // ---- Vues ----------------------------------------------------------
-  const renderCards = () =>
-    ues.map((ue) => (
-      <div key={ue.id} className="card p-6 animate-in">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white flex-shrink-0">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-            </div>
-            {editingUeId === ue.id ? ueNameForm(ue) : (
-              <div className="flex items-center gap-1.5">
-                <h3 className="text-lg font-semibold text-slate-900">{ue.name}</h3>
-                {ueEditBtn(ue)}
+  // ---- Vues (reçoivent la liste d'UE d'un semestre) -----------------
+  const renderCards = (list: UE[]) => (
+    <div className="space-y-4">
+      {list.map((ue) => (
+        <div key={ue.id} className="card p-6 animate-in">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white flex-shrink-0">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
               </div>
-            )}
+              {editingUeId === ue.id ? ueNameForm(ue) : (
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-lg font-semibold text-slate-900">{ue.name}</h3>
+                  {ueEditBtn(ue)}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className={`text-xl font-bold ${averageColor(ueAverage(ue.grades))}`}>{formatAverage(ueAverage(ue.grades))}</div>
+                <div className="text-[11px] text-slate-400 -mt-0.5">moyenne UE</div>
+              </div>
+              {trashBtn(() => deleteUe(ue.id), "Supprimer l'UE")}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            {ueAvgBadge(ueAverage(ue.grades))}
-            {trashBtn(() => deleteUe(ue.id), "Supprimer l'UE")}
-          </div>
+          {ue.grades.length >= 2 && (
+            <div className="flex items-center justify-end gap-2 mb-3 -mt-1">
+              <span className="text-[11px] uppercase tracking-wide text-slate-400">Évolution</span>
+              {sparkline(ue)}
+            </div>
+          )}
+          <div className="mb-4">{gradeChips(ue)}</div>
+          <div className="pt-3 border-t border-slate-100">{addGradeForm(ue)}</div>
         </div>
-        {ue.grades.length >= 2 && (
-          <div className="flex items-center justify-end gap-2 mb-3 -mt-1">
-            <span className="text-[11px] uppercase tracking-wide text-slate-400">Évolution</span>
-            <Sparkline data={runningAverages(ue.grades)} />
-          </div>
-        )}
-        <div className="mb-4">{gradeChips(ue)}</div>
-        <div className="pt-3 border-t border-slate-100">{addGradeForm(ue)}</div>
-      </div>
-    ));
+      ))}
+    </div>
+  );
 
-  const renderList = () => (
+  const renderList = (list: UE[]) => (
     <div className="card divide-y divide-slate-100 animate-in overflow-hidden">
-      {ues.map((ue) => {
+      {list.map((ue) => {
         const avg = ueAverage(ue.grades);
         const open = !!expanded[ue.id];
         return (
@@ -466,12 +528,19 @@ export default function NotesPage() {
                 </button>
               )}
               <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="hidden sm:block">{sparkline(ue, 72, 24)}</span>
                 {editingUeId !== ue.id && ueEditBtn(ue)}
                 <span className={`text-lg font-bold ${averageColor(avg)}`}>{formatAverage(avg)}</span>
               </div>
             </div>
             {open && (
               <div className="px-5 pb-5 space-y-4 bg-slate-50/50">
+                {ue.grades.length >= 2 && (
+                  <div className="flex items-center gap-2 pt-3">
+                    <span className="text-[11px] uppercase tracking-wide text-slate-400">Évolution</span>
+                    {sparkline(ue)}
+                  </div>
+                )}
                 {gradeChips(ue)}
                 <div className="pt-3 border-t border-slate-100">{addGradeForm(ue)}</div>
                 <button onClick={() => deleteUe(ue.id)} className="text-sm text-red-500 hover:text-red-600 font-medium">Supprimer l&apos;UE</button>
@@ -483,7 +552,7 @@ export default function NotesPage() {
     </div>
   );
 
-  const renderTable = () => (
+  const renderTable = (list: UE[]) => (
     <div className="card overflow-hidden animate-in">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -496,7 +565,7 @@ export default function NotesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {ues.map((ue) => {
+            {list.map((ue) => {
               const avg = ueAverage(ue.grades);
               const open = !!expanded[ue.id];
               return (
@@ -511,7 +580,10 @@ export default function NotesPage() {
                       )}
                     </td>
                     <td className="px-5 py-3 align-top">{gradeChips(ue)}</td>
-                    <td className={`px-5 py-3 text-right font-bold align-top ${averageColor(avg)}`}>{formatAverage(avg)}</td>
+                    <td className="px-5 py-3 text-right align-top">
+                      <div className={`font-bold ${averageColor(avg)}`}>{formatAverage(avg)}</div>
+                      {ue.grades.length >= 2 && <div className="flex justify-end mt-1">{sparkline(ue, 84, 26)}</div>}
+                    </td>
                     <td className="px-5 py-3 align-top">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => toggleExpand(ue.id)} className="text-blue-600 hover:text-blue-700 p-1" title="Ajouter une note">
@@ -534,6 +606,13 @@ export default function NotesPage() {
       </div>
     </div>
   );
+
+  const renderSemesterUes = (list: UE[]) =>
+    list.length === 0
+      ? <p className="text-sm text-slate-400 px-1 py-2">Aucune UE dans ce semestre.</p>
+      : viewMode === 'cards' ? renderCards(list)
+      : viewMode === 'list' ? renderList(list)
+      : renderTable(list);
 
   const viewButtons: { mode: ViewMode; label: string; icon: React.ReactNode }[] = [
     { mode: 'cards', label: 'Cartes', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h5a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM13 5a1 1 0 011-1h5a1 1 0 011 1v5a1 1 0 01-1 1h-5a1 1 0 01-1-1V5zM4 14a1 1 0 011-1h5a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1v-5zM13 14a1 1 0 011-1h5a1 1 0 011 1v5a1 1 0 01-1 1h-5a1 1 0 01-1-1v-5z" /> },
@@ -581,10 +660,9 @@ export default function NotesPage() {
   return (
     <div className="min-h-screen app-bg py-8 px-4">
       <div className="max-w-3xl mx-auto">
-        {/* En-tête */}
         <div className="text-center mb-8 animate-in">
           <h1 className="text-3xl font-bold tracking-tight gradient-text">Suivi des notes</h1>
-          <p className="text-slate-600 mt-2">Créez vos UE, saisissez vos notes, suivez vos moyennes.</p>
+          <p className="text-slate-600 mt-2">Organisez vos UE par semestre et suivez vos moyennes.</p>
         </div>
 
         {formations.length === 0 && !showFormationForm ? (
@@ -594,12 +672,12 @@ export default function NotesPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422A12.083 12.083 0 0112 21.5a12.083 12.083 0 01-6.16-10.922L12 14z" />
             </>}
             title="Aucune formation"
-            description="Renseignez les informations de votre formation pour créer vos UE et suivre vos moyennes."
+            description="Renseignez les informations de votre formation pour créer vos semestres, UE et suivre vos moyennes."
             action={<button onClick={() => { setFormationForm(EMPTY_FORMATION); setShowFormationForm(true); }} className="btn btn-primary py-3 px-6">Créer ma formation</button>}
           />
         ) : (
           <div className="space-y-6">
-            {/* Barre formation + moyenne générale */}
+            {/* Barre formation + moyenne annuelle */}
             <div className="card p-6 animate-in">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex-1">
@@ -621,8 +699,8 @@ export default function NotesPage() {
                   )}
                 </div>
                 <div className="text-center bg-slate-50 rounded-xl px-6 py-4 border border-slate-100">
-                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Moyenne générale</div>
-                  <div className={`text-3xl font-bold ${averageColor(overall)}`}>{formatAverage(overall)}</div>
+                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Moyenne annuelle</div>
+                  <div className={`text-3xl font-bold ${averageColor(annual)}`}>{formatAverage(annual)}</div>
                   <div className="text-xs text-slate-400">/ 20</div>
                 </div>
               </div>
@@ -657,44 +735,65 @@ export default function NotesPage() {
               </form>
             )}
 
-            {/* Sélecteur de vue + liste des UE */}
+            {/* Sélecteur de vue global */}
+            {selectedId && !showFormationForm && ues.length > 0 && (
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <span className="text-sm text-slate-500">{ues.length} UE · {semesters.length} semestre{semesters.length > 1 ? 's' : ''}</span>
+                <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                  {viewButtons.map((v) => (
+                    <button key={v.mode} onClick={() => changeView(v.mode)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === v.mode ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`} title={v.label}>
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">{v.icon}</svg>
+                      <span className="hidden sm:inline">{v.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Semestres */}
             {selectedId && !showFormationForm && (
               <>
-                {ues.length > 0 && (
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <span className="text-sm text-slate-500">{ues.length} UE</span>
-                    <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
-                      {viewButtons.map((v) => (
-                        <button
-                          key={v.mode}
-                          onClick={() => changeView(v.mode)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            viewMode === v.mode ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-                          }`}
-                          title={v.label}
-                        >
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">{v.icon}</svg>
-                          <span className="hidden sm:inline">{v.label}</span>
-                        </button>
-                      ))}
+                {semesters.map((sem) => {
+                  const list = semUes(sem.id);
+                  const avg = semesterAverage(sem.id);
+                  return (
+                    <div key={sem.id} className="space-y-4">
+                      {/* En-tête de semestre */}
+                      <div className="flex items-center justify-between gap-3 pt-2">
+                        {editingSemesterId === sem.id ? (
+                          <form onSubmit={(e) => saveEditSemester(e, sem.id)} className="flex items-center gap-1.5">
+                            <input autoFocus required value={editSemesterName} onChange={(e) => setEditSemesterName(e.target.value)} className="px-2 py-1 border border-slate-300 rounded text-base font-semibold" />
+                            <button type="submit" className="text-green-600 hover:text-green-700 p-0.5" title="Enregistrer"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></button>
+                            <button type="button" onClick={() => setEditingSemesterId(null)} className="text-slate-400 hover:text-slate-600 p-0.5" title="Annuler"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                          </form>
+                        ) : (
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="inline-flex h-7 items-center rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold px-3 ring-1 ring-indigo-100">{sem.name}</span>
+                            <button onClick={() => startEditSemester(sem)} className="text-slate-300 hover:text-blue-600 p-0.5" title="Renommer le semestre"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                            <button onClick={() => deleteSemester(sem.id)} className="text-slate-300 hover:text-red-500 p-0.5" title="Supprimer le semestre"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                          </div>
+                        )}
+                        <div className="text-right flex-shrink-0">
+                          <span className={`text-lg font-bold ${averageColor(avg)}`}>{formatAverage(avg)}</span>
+                          <span className="text-xs text-slate-400 ml-1">moy. semestre</span>
+                        </div>
+                      </div>
+
+                      {renderSemesterUes(list)}
+
+                      {/* Ajout d'une UE dans ce semestre */}
+                      <form onSubmit={(e) => addUe(e, sem.id)} className="flex flex-wrap items-end gap-3">
+                        <div className="flex-1 min-w-[180px]">
+                          <input value={newUeInputs[sem.id] || ''} onChange={(e) => setNewUeInput(sem.id, e.target.value)} placeholder={`Nouvelle UE dans ${sem.name}`} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white" required />
+                        </div>
+                        <button type="submit" className="btn px-4 py-2.5 text-sm border border-slate-300 text-slate-700 hover:bg-slate-100">+ UE</button>
+                      </form>
                     </div>
-                  </div>
-                )}
+                  );
+                })}
 
-                {ues.length > 0 && (
-                  viewMode === 'cards' ? <div className="space-y-6">{renderCards()}</div>
-                  : viewMode === 'list' ? renderList()
-                  : renderTable()
-                )}
-
-                {/* Ajout d'une UE */}
-                <form onSubmit={addUe} className="card p-5 animate-in flex flex-wrap items-end gap-3">
-                  <div className="flex-1 min-w-[180px]">
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Nouvelle UE</label>
-                    <input value={newUeName} onChange={(e) => setNewUeName(e.target.value)} placeholder="Ex. Développement web" className="w-full px-4 py-2.5 border border-slate-300 rounded-lg" required />
-                  </div>
-                  <button type="submit" disabled={busy} className="btn btn-primary py-2.5 px-5">Ajouter l&apos;UE</button>
-                </form>
+                {/* Ajout d'un semestre */}
+                <button onClick={addSemester} className="btn btn-primary w-full py-3">+ Ajouter un semestre</button>
               </>
             )}
           </div>

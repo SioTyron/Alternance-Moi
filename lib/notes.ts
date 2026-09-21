@@ -9,6 +9,13 @@ export type Formation = {
   academic_year: string | null;
 };
 
+export type Semester = {
+  id: string;
+  formation_id: string;
+  name: string;
+  position: number;
+};
+
 export type Grade = {
   id: string;
   ue_id: string;
@@ -21,6 +28,7 @@ export type Grade = {
 export type UE = {
   id: string;
   formation_id: string;
+  semester_id?: string | null;
   name: string;
   grades: Grade[];
 };
@@ -48,6 +56,16 @@ export function overallAverage(ues: { grades: Grade[] }[]): number | null {
     .filter((a): a is number => a !== null);
   if (averages.length === 0) return null;
   return averages.reduce((sum, a) => sum + a, 0) / averages.length;
+}
+
+/**
+ * Moyenne annuelle : moyenne simple des moyennes de semestre
+ * (chaque semestre a le même poids). Les semestres sans note sont ignorés.
+ */
+export function annualAverage(semesterAverages: (number | null)[]): number | null {
+  const vals = semesterAverages.filter((a): a is number => a !== null);
+  if (vals.length === 0) return null;
+  return vals.reduce((sum, a) => sum + a, 0) / vals.length;
 }
 
 /**
