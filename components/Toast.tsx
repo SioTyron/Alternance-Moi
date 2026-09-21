@@ -3,12 +3,14 @@
 import { createContext, useCallback, useContext, useMemo, useState, ReactNode } from 'react';
 
 type ToastType = 'success' | 'error' | 'info';
-type ToastItem = { id: number; type: ToastType; message: string };
+type ToastAction = { label: string; onClick: () => void };
+type ToastOptions = { action?: ToastAction; duration?: number };
+type ToastItem = { id: number; type: ToastType; message: string; action?: ToastAction };
 
 type ToastApi = {
-  success: (message: string) => void;
-  error: (message: string) => void;
-  info: (message: string) => void;
+  success: (message: string, opts?: ToastOptions) => void;
+  error: (message: string, opts?: ToastOptions) => void;
+  info: (message: string, opts?: ToastOptions) => void;
 };
 
 const noop: ToastApi = { success: () => {}, error: () => {}, info: () => {} };
@@ -58,16 +60,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((list) => list.filter((t) => t.id !== id));
   }, []);
 
-  const push = useCallback((type: ToastType, message: string) => {
+  const push = useCallback((type: ToastType, message: string, opts?: ToastOptions) => {
     const id = ++counter;
-    setToasts((list) => [...list, { id, type, message }]);
-    setTimeout(() => remove(id), 3800);
+    setToasts((list) => [...list, { id, type, message, action: opts?.action }]);
+    setTimeout(() => remove(id), opts?.duration ?? (opts?.action ? 5500 : 3800));
   }, [remove]);
 
   const api = useMemo<ToastApi>(() => ({
-    success: (m) => push('success', m),
-    error: (m) => push('error', m),
-    info: (m) => push('info', m),
+    success: (m, o) => push('success', m, o),
+    error: (m, o) => push('error', m, o),
+    info: (m, o) => push('info', m, o),
   }), [push]);
 
   return (
@@ -82,6 +84,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           >
             {STYLES[t.type].icon}
             <p className="text-sm text-slate-700 flex-1">{t.message}</p>
+            {t.action && (
+              <button
+                onClick={() => { t.action!.onClick(); remove(t.id); }}
+                className="flex-shrink-0 text-sm font-semibold text-blue-600 hover:text-blue-700 px-2 py-1 rounded-md hover:bg-blue-50"
+              >
+                {t.action.label}
+              </button>
+            )}
             <button onClick={() => remove(t.id)} className="text-slate-300 hover:text-slate-500 flex-shrink-0" aria-label="Fermer">
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

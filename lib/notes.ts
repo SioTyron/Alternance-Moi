@@ -15,6 +15,7 @@ export type Grade = {
   label: string | null;
   value: number;
   coefficient: number;
+  created_at?: string;
 };
 
 export type UE = {
@@ -47,6 +48,24 @@ export function overallAverage(ues: { grades: Grade[] }[]): number | null {
     .filter((a): a is number => a !== null);
   if (averages.length === 0) return null;
   return averages.reduce((sum, a) => sum + a, 0) / averages.length;
+}
+
+/**
+ * Moyenne d'UE cumulée après chaque note (dans l'ordre chronologique).
+ * Sert à tracer l'évolution de la moyenne de l'UE.
+ */
+export function runningAverages(grades: Grade[]): number[] {
+  const sorted = [...grades].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
+  const out: number[] = [];
+  let weighted = 0;
+  let totalCoef = 0;
+  for (const g of sorted) {
+    const c = Number(g.coefficient) || 1;
+    weighted += Number(g.value) * c;
+    totalCoef += c;
+    out.push(totalCoef ? weighted / totalCoef : 0);
+  }
+  return out;
 }
 
 /** Formate une moyenne (/20) ou "—" si null. */

@@ -6,10 +6,13 @@ import { exportAllReportsToPDF } from '@/lib/exportReports';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast';
+import { useConfirm } from '@/components/Confirm';
+import EmptyState from '@/components/EmptyState';
 
 export default function ReportsPage() {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<any>(null);
@@ -163,9 +166,13 @@ export default function ReportsPage() {
   };
 
   const handleDelete = async (reportId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce rapport ?')) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Supprimer le rapport',
+      message: 'Ce rapport et ses fichiers joints seront définitivement supprimés. Cette action est irréversible.',
+      confirmLabel: 'Supprimer',
+      danger: true,
+    });
+    if (!ok) return;
 
     setDeletingId(reportId);
     
@@ -198,10 +205,29 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen app-bg flex items-center justify-center">
-        <div className="card p-8 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Chargement de vos rapports...</p>
+      <div className="min-h-screen app-bg py-8 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <div className="skeleton h-8 w-48 mx-auto" />
+            <div className="skeleton h-4 w-64 mx-auto mt-3" />
+          </div>
+          <div className="space-y-6">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="card p-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="skeleton h-12 w-12" />
+                  <div className="flex-1 space-y-2">
+                    <div className="skeleton h-5 w-1/2" />
+                    <div className="skeleton h-3 w-1/3" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="skeleton h-3 w-full" />
+                  <div className="skeleton h-3 w-5/6" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -261,21 +287,12 @@ export default function ReportsPage() {
         {/* Reports List */}
         <div className="space-y-6">
           {reports.length === 0 ? (
-            <div className="card p-8 text-center">
-              <div className="h-16 w-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Aucun rapport pour le moment</h3>
-              <p className="text-gray-600 mb-6">Commencez par créer votre premier rapport d'activité.</p>
-              <Link 
-                href="/new-report" 
-                className="inline-block bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
-              >
-                Créer un rapport
-              </Link>
-            </div>
+            <EmptyState
+              icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />}
+              title="Aucun rapport pour le moment"
+              description="Commencez par créer votre premier rapport d'activité d'alternance."
+              action={<Link href="/new-report" className="btn btn-primary py-3 px-6">Créer un rapport</Link>}
+            />
           ) : (
             reports.map((report) => (
               <div 

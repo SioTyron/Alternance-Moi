@@ -4,12 +4,16 @@ import { useEffect, useState, Fragment } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast';
+import { useConfirm } from '@/components/Confirm';
+import EmptyState from '@/components/EmptyState';
+import Sparkline from '@/components/Sparkline';
 import {
   Formation,
   UE,
   Grade,
   ueAverage,
   overallAverage,
+  runningAverages,
   formatAverage,
   averageColor,
 } from '@/lib/notes';
@@ -23,6 +27,7 @@ type ViewMode = 'cards' | 'list' | 'table';
 export default function NotesPage() {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [userId, setUserId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [formations, setFormations] = useState<Formation[]>([]);
@@ -92,7 +97,7 @@ export default function NotesPage() {
   const loadUes = async (formationId: string) => {
     const { data } = await supabase
       .from('ues')
-      .select('id, formation_id, name, grades(id, ue_id, label, value, coefficient)')
+      .select('id, formation_id, name, grades(id, ue_id, label, value, coefficient, created_at)')
       .eq('formation_id', formationId)
       .order('created_at', { ascending: true });
     setUes((data as UE[]) || []);
@@ -146,7 +151,13 @@ export default function NotesPage() {
 
   const deleteFormation = async () => {
     if (!selectedFormation) return;
-    if (!confirm(`Supprimer la formation « ${selectedFormation.name} » et toutes ses UE/notes ?`)) return;
+    const ok = await confirm({
+      title: 'Supprimer la formation',
+      message: `« ${selectedFormation.name} » et toutes ses UE et notes seront supprimées définitivement.`,
+      confirmLabel: 'Supprimer',
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(true);
     await supabase.from('formations').delete().eq('id', selectedFormation.id);
     const remaining = formations.filter((f) => f.id !== selectedFormation.id);
@@ -193,7 +204,13 @@ export default function NotesPage() {
   };
 
   const deleteUe = async (ueId: string) => {
-    if (!confirm('Supprimer cette UE et ses notes ?')) return;
+    const ok = await confirm({
+      title: "Supprimer l'UE",
+      message: 'Cette UE et toutes ses notes seront supprimées.',
+      confirmLabel: 'Supprimer',
+      danger: true,
+    });
+    if (!ok) return;
     await supabase.from('ues').delete().eq('id', ueId);
     setUes((prev) => prev.filter((u) => u.id !== ueId));
     toast.success('UE supprimée');
@@ -238,7 +255,7 @@ export default function NotesPage() {
     const { data } = await supabase
       .from('grades')
       .insert({ ue_id: ueId, user_id: userId, value, coefficient, label: input.label.trim() || null })
-      .select('id, ue_id, label, value, coefficient')
+      .select('id, ue_id, label, value, coefficient, created_at')
       .single();
 
     if (data) {
@@ -248,9 +265,23 @@ export default function NotesPage() {
     }
   };
 
-  const deleteGrade = async (ueId: string, gradeId: string) => {
-    await supabase.from('grades').delete().eq('id', gradeId);
-    setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: u.grades.filter((g) => g.id !== gradeId) } : u)));
+  const deleteGrade = async (ueId: string, grade: Grade) => {
+    // Suppression optimiste + possibilité d'annuler
+    setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: u.grades.filter((g) => g.id !== grade.id) } : u)));
+    await supabase.from('grades').delete().eq('id', grade.id);
+    toast.info('Note supprimée', {
+      action: {
+        label: 'Annuler',
+        onClick: async () => {
+          const { data } = await supabase
+            .from('grades')
+            .insert({ ue_id: grade.ue_id, user_id: userId, value: grade.value, coefficient: grade.coefficient, label: grade.label })
+            .select('id, ue_id, label, value, coefficient, created_at')
+            .single();
+          if (data) setUes((prev) => prev.map((u) => (u.id === ueId ? { ...u, grades: [...u.grades, data as Grade] } : u)));
+        },
+      },
+    });
   };
 
   const startEditGrade = (g: Grade) => {
@@ -282,7 +313,7 @@ export default function NotesPage() {
       .from('grades')
       .update({ value, coefficient, label: editGrade.label.trim() || null })
       .eq('id', editingGradeId)
-      .select('id, ue_id, label, value, coefficient')
+      .select('id, ue_id, label, value, coefficient, created_at')
       .single();
 
     if (data) {
@@ -320,7 +351,7 @@ export default function NotesPage() {
               <button onClick={() => startEditGrade(g)} className="ml-1 text-slate-300 hover:text-blue-600" title="Modifier la note">
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
               </button>
-              <button onClick={() => deleteGrade(ue.id, g.id)} className="text-slate-300 hover:text-red-500" title="Supprimer la note">
+              <button onClick={() => deleteGrade(ue.id, g)} className="text-slate-300 hover:text-red-500" title="Supprimer la note">
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </span>
@@ -406,6 +437,12 @@ export default function NotesPage() {
             {trashBtn(() => deleteUe(ue.id), "Supprimer l'UE")}
           </div>
         </div>
+        {ue.grades.length >= 2 && (
+          <div className="flex items-center justify-end gap-2 mb-3 -mt-1">
+            <span className="text-[11px] uppercase tracking-wide text-slate-400">Évolution</span>
+            <Sparkline data={runningAverages(ue.grades)} />
+          </div>
+        )}
         <div className="mb-4">{gradeChips(ue)}</div>
         <div className="pt-3 border-t border-slate-100">{addGradeForm(ue)}</div>
       </div>
@@ -507,10 +544,35 @@ export default function NotesPage() {
   // ---- Rendu ---------------------------------------------------------
   if (loading) {
     return (
-      <div className="min-h-screen app-bg flex items-center justify-center">
-        <div className="card p-8 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-slate-600">Chargement...</p>
+      <div className="min-h-screen app-bg py-8 px-4">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-8">
+            <div className="skeleton h-8 w-56 mx-auto" />
+            <div className="skeleton h-4 w-72 mx-auto mt-3" />
+          </div>
+          <div className="card p-6 mb-6 flex items-center justify-between">
+            <div className="flex-1 space-y-2">
+              <div className="skeleton h-3 w-20" />
+              <div className="skeleton h-10 w-full max-w-xs" />
+            </div>
+            <div className="skeleton h-16 w-28 ml-4" />
+          </div>
+          {[0, 1].map((i) => (
+            <div key={i} className="card p-6 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="skeleton h-10 w-10" />
+                  <div className="skeleton h-5 w-40" />
+                </div>
+                <div className="skeleton h-6 w-12" />
+              </div>
+              <div className="flex gap-2">
+                <div className="skeleton h-8 w-20" />
+                <div className="skeleton h-8 w-20" />
+                <div className="skeleton h-8 w-24" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -526,19 +588,15 @@ export default function NotesPage() {
         </div>
 
         {formations.length === 0 && !showFormationForm ? (
-          <div className="card p-8 text-center animate-in">
-            <div className="h-16 w-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/30">
-              <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422A12.083 12.083 0 0112 21.5a12.083 12.083 0 01-6.16-10.922L12 14z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-slate-900 mb-2">Aucune formation</h3>
-            <p className="text-slate-600 mb-6">Commencez par renseigner les informations de votre formation.</p>
-            <button onClick={() => { setFormationForm(EMPTY_FORMATION); setShowFormationForm(true); }} className="btn btn-primary py-3 px-6">
-              Créer ma formation
-            </button>
-          </div>
+          <EmptyState
+            icon={<>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422A12.083 12.083 0 0112 21.5a12.083 12.083 0 01-6.16-10.922L12 14z" />
+            </>}
+            title="Aucune formation"
+            description="Renseignez les informations de votre formation pour créer vos UE et suivre vos moyennes."
+            action={<button onClick={() => { setFormationForm(EMPTY_FORMATION); setShowFormationForm(true); }} className="btn btn-primary py-3 px-6">Créer ma formation</button>}
+          />
         ) : (
           <div className="space-y-6">
             {/* Barre formation + moyenne générale */}

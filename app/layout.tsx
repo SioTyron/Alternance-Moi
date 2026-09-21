@@ -4,6 +4,8 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import Header from '@/components/Header';
 import { ToastProvider } from '@/components/Toast';
+import { ConfirmProvider } from '@/components/Confirm';
+import PageTransition from '@/components/PageTransition';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,12 +24,14 @@ export default function RootLayout({
     <html lang="fr">
       <body className={inter.className}>
         <ToastProvider>
-          <div className="min-h-screen flex flex-col">
-            <Header />
-            <main className="flex-1">
-              {children}
-            </main>
-          </div>
+          <ConfirmProvider>
+            <div className="min-h-screen flex flex-col">
+              <Header />
+              <main className="flex-1">
+                <PageTransition>{children}</PageTransition>
+              </main>
+            </div>
+          </ConfirmProvider>
         </ToastProvider>
       </body>
     </html>

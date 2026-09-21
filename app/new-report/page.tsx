@@ -27,6 +27,8 @@ export default function NewReportPage() {
   });
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [uploadDone, setUploadDone] = useState(0);
+  const [uploadTotal, setUploadTotal] = useState(0);
   const [files, setFiles] = useState<File[]>([]);
 
   useEffect(() => {
@@ -116,9 +118,12 @@ export default function NewReportPage() {
 
       const uploadedFiles = [];
       if (files.length > 0 && report) {
+        setUploadTotal(files.length);
+        setUploadDone(0);
         for (const file of files) {
           const uploadedFile = await uploadFile(file, report.id);
           if (uploadedFile) uploadedFiles.push(uploadedFile);
+          setUploadDone((n) => n + 1);
         }
 
         if (uploadedFiles.length > 0) {
@@ -136,7 +141,7 @@ export default function NewReportPage() {
 
       // Succès : coche animée puis redirection, le toast s'affiche sur /reports
       setDone(true);
-      toast.success('Rapport créé avec succès 🎉');
+      toast.success('Rapport créé avec succès');
       setTimeout(() => router.push('/reports'), 900);
     } catch {
       toast.error('Erreur lors de la création du rapport.');
@@ -310,6 +315,22 @@ export default function NewReportPage() {
                 </div>
               )}
             </div>
+
+            {/* Barre de progression d'upload */}
+            {loading && uploadTotal > 0 && (
+              <div className="pt-2 animate-in">
+                <div className="flex justify-between text-sm text-slate-600 mb-1.5">
+                  <span>Envoi des fichiers…</span>
+                  <span className="font-medium">{uploadDone}/{uploadTotal}</span>
+                </div>
+                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.round((uploadDone / uploadTotal) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 pt-4">

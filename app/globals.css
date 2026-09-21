@@ -168,8 +168,42 @@ input[type="checkbox"], input[type="radio"], input[type="date"] { accent-color: 
 }
 .draw-check { stroke-dasharray: 28; animation: drawCheck .5s .12s ease-out both; }
 
+/* Transition de page */
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter { animation: pageEnter .35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Skeletons de chargement */
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #e6ebf2;
+  border-radius: .5rem;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+/* Backdrop de modale */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.fade-in { animation: fadeIn .2s ease both; }
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-in { animation: modalIn .26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .animate-in { animation: none; }
+  .animate-in, .page-enter, .pop-in, .draw-check, .toast-in, .modal-in, .fade-in { animation: none; }
+  .skeleton::after { animation: none; }
   *, *::before, *::after { transition-duration: .01ms !important; }
 }
