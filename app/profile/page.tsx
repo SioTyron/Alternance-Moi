@@ -106,10 +106,28 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen app-bg flex items-center justify-center">
-        <div className="card p-8 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Chargement...</p>
+      <div className="min-h-screen app-bg py-8 px-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="text-center mb-8">
+            <div className="skeleton h-16 w-16 rounded-full mx-auto mb-4" />
+            <div className="skeleton h-8 w-40 mx-auto" />
+            <div className="skeleton h-4 w-56 mx-auto mt-3" />
+          </div>
+          <div className="card p-6 md:p-8 space-y-6">
+            <div className="space-y-2">
+              <div className="skeleton h-4 w-24" />
+              <div className="skeleton h-11 w-full" />
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className={i >= 3 ? 'md:col-span-2 space-y-2' : 'space-y-2'}>
+                  <div className="skeleton h-4 w-28" />
+                  <div className="skeleton h-11 w-full" />
+                </div>
+              ))}
+            </div>
+            <div className="skeleton h-12 w-full" />
+          </div>
         </div>
       </div>
     );
