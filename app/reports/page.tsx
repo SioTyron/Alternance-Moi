@@ -18,6 +18,31 @@ export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [exportingSelection, setExportingSelection] = useState(false);
+
+  const toggleSelect = (id: string) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const clearSelection = () => setSelected(new Set());
+  const selectAll = () => setSelected(new Set(reports.map((r) => r.id)));
+
+  const exportSelection = async () => {
+    if (selected.size === 0 || exportingSelection) return;
+    setExportingSelection(true);
+    try {
+      const subset = reports.filter((r) => selected.has(r.id));
+      await exportAllReportsToPDF(subset);
+      toast.success(`${subset.length} rapport${subset.length > 1 ? 's' : ''} exporté${subset.length > 1 ? 's' : ''} en PDF`);
+    } catch (error) {
+      console.error('Error exporting selection:', error);
+      toast.error("Erreur lors de l'export PDF");
+    } finally {
+      setExportingSelection(false);
+    }
+  };
 
   useEffect(() => {
     const fetchReports = async () => {
@@ -320,6 +345,15 @@ export default function ReportsPage() {
                         </div>
                       </div>
                     </div>
+                    <label className="flex items-center gap-2 mt-3 sm:mt-0 cursor-pointer select-none flex-shrink-0" title="Sélectionner pour l'export">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(report.id)}
+                        onChange={() => toggleSelect(report.id)}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                      <span className="text-xs text-slate-400 sm:hidden">Sélectionner pour l&apos;export</span>
+                    </label>
                   </div>
 
                   {/* Content Preview */}
@@ -527,6 +561,22 @@ export default function ReportsPage() {
           )}
         </div>
       </div>
+
+      {/* Barre d'action de sélection */}
+      {selected.size > 0 && (
+        <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 pointer-events-none">
+          <div className="pointer-events-auto card px-4 py-3 flex items-center gap-3 shadow-xl toast-in">
+            <span className="text-sm font-medium text-slate-700 whitespace-nowrap">
+              {selected.size} sélectionné{selected.size > 1 ? 's' : ''}
+            </span>
+            <button onClick={selectAll} className="text-sm text-slate-500 hover:text-blue-700 whitespace-nowrap">Tout</button>
+            <button onClick={clearSelection} className="text-sm text-slate-500 hover:text-slate-700 whitespace-nowrap">Effacer</button>
+            <button onClick={exportSelection} disabled={exportingSelection} className="btn btn-primary px-4 py-2 text-sm whitespace-nowrap">
+              {exportingSelection ? 'Export…' : 'Exporter la sélection'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
