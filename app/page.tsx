@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
+import GuideSection from '@/components/GuideSection';
 
 export default function HomePage() {
   const [session, setSession] = useState<any>(null);
@@ -110,11 +111,12 @@ export default function HomePage() {
               {/* Fonctionnalités */}
               <div className="mt-14">
                 <h3 className="text-xl font-semibold text-center text-slate-900 mb-8">Ce que vous pouvez faire</h3>
-                <div className="grid md:grid-cols-3 gap-5">
+                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
                   {[
-                    { iconBg: 'bg-blue-100', iconText: 'text-blue-600', title: 'Rapports détaillés', desc: "Créez et gérez vos rapports d'activité facilement", icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /> },
-                    { iconBg: 'bg-green-100', iconText: 'text-green-600', title: 'Pièces jointes', desc: 'Ajoutez images, PDF et documents à vos rapports', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /> },
-                    { iconBg: 'bg-purple-100', iconText: 'text-purple-600', title: 'Export PDF', desc: 'Exportez tous vos rapports en un clic', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /> },
+                    { iconBg: 'bg-blue-100', iconText: 'text-blue-600', title: "Rapports d'activité", desc: 'Créez, modifiez et joignez des fichiers à vos rapports.', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /> },
+                    { iconBg: 'bg-indigo-100', iconText: 'text-indigo-600', title: 'Suivi des notes', desc: 'UE par semestre, moyennes automatiques et graphes.', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /> },
+                    { iconBg: 'bg-purple-100', iconText: 'text-purple-600', title: 'Export PDF à la carte', desc: 'Exportez tout ou une sélection, dans un PDF soigné.', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /> },
+                    { iconBg: 'bg-emerald-100', iconText: 'text-emerald-600', title: 'Corbeille', desc: 'Suppressions récupérables pendant 30 jours.', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /> },
                   ].map((f, i) => (
                     <div key={i} className="card card-hover p-6 text-center animate-in" style={{ animationDelay: `${150 + i * 60}ms` }}>
                       <div className={`h-12 w-12 ${f.iconBg} rounded-xl flex items-center justify-center mx-auto mb-4`}>
@@ -146,6 +148,8 @@ export default function HomePage() {
               </div>
             </div>
           )}
+
+          <GuideSection />
         </div>
       </div>
     </div>

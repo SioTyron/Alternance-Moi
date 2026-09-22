@@ -18,6 +18,7 @@ export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exportingSelection, setExportingSelection] = useState(false);
 
@@ -26,8 +27,9 @@ export default function ReportsPage() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const clearSelection = () => setSelected(new Set());
   const selectAll = () => setSelected(new Set(reports.map((r) => r.id)));
+  const enterSelection = () => { setSelectionMode(true); setSelected(new Set()); };
+  const exitSelection = () => { setSelectionMode(false); setSelected(new Set()); };
 
   const exportSelection = async () => {
     if (selected.size === 0 || exportingSelection) return;
@@ -36,6 +38,7 @@ export default function ReportsPage() {
       const subset = reports.filter((r) => selected.has(r.id));
       await exportAllReportsToPDF(subset);
       toast.success(`${subset.length} rapport${subset.length > 1 ? 's' : ''} exporté${subset.length > 1 ? 's' : ''} en PDF`);
+      exitSelection();
     } catch (error) {
       console.error('Error exporting selection:', error);
       toast.error("Erreur lors de l'export PDF");
@@ -269,25 +272,31 @@ export default function ReportsPage() {
           <p className="text-gray-600 mt-2">Consultez l'historique de vos activités d'alternance</p>
 
           {reports.length > 0 && (
-            <button
-              onClick={handleExportAll}
-              disabled={exporting}
-              className="mt-4 inline-flex items-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-2.5 px-5 rounded-lg transition-all duration-200 transform hover:scale-[1.02]"
-            >
-              {exporting ? (
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+              {!selectionMode ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Export en cours...
+                  <button onClick={handleExportAll} disabled={exporting} className="btn btn-primary py-2.5 px-5 text-sm">
+                    {exporting ? (
+                      <span className="flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />Export en cours…</span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        Tout exporter en PDF
+                      </span>
+                    )}
+                  </button>
+                  <button onClick={enterSelection} className="btn py-2.5 px-5 text-sm border border-slate-300 text-slate-700 hover:bg-slate-100">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Choisir les rapports à exporter
+                  </button>
                 </>
               ) : (
-                <>
-                  <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Tout exporter en PDF
-                </>
+                <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 text-sm font-medium px-4 py-2 ring-1 ring-blue-100 animate-in">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" /></svg>
+                  Touchez les rapports à inclure dans l&apos;export
+                </div>
               )}
-            </button>
+            </div>
           )}
         </div>
 
@@ -320,9 +329,14 @@ export default function ReportsPage() {
             />
           ) : (
             reports.map((report) => (
-              <div 
-                key={report.id} 
-                className="card hover:shadow-xl transition-all duration-300 overflow-hidden"
+              <div
+                key={report.id}
+                onClick={selectionMode ? () => toggleSelect(report.id) : undefined}
+                className={`card overflow-hidden transition-all duration-300 ${
+                  selectionMode
+                    ? 'cursor-pointer ' + (selected.has(report.id) ? 'ring-2 ring-blue-500 bg-blue-50/40' : 'hover:ring-2 hover:ring-blue-200')
+                    : 'hover:shadow-xl'
+                }`}
               >
                 <div className="p-6">
                   {/* Header */}
@@ -345,15 +359,17 @@ export default function ReportsPage() {
                         </div>
                       </div>
                     </div>
-                    <label className="flex items-center gap-2 mt-3 sm:mt-0 cursor-pointer select-none flex-shrink-0" title="Sélectionner pour l'export">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(report.id)}
-                        onChange={() => toggleSelect(report.id)}
-                        className="h-4 w-4 rounded border-slate-300"
-                      />
-                      <span className="text-xs text-slate-400 sm:hidden">Sélectionner pour l&apos;export</span>
-                    </label>
+                    {selectionMode && (
+                      <div className="flex-shrink-0 mt-3 sm:mt-1">
+                        {selected.has(report.id) ? (
+                          <span className="h-6 w-6 rounded-full bg-blue-600 text-white flex items-center justify-center pop-in">
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                          </span>
+                        ) : (
+                          <span className="h-6 w-6 rounded-full border-2 border-slate-300 block" />
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Content Preview */}
@@ -392,7 +408,8 @@ export default function ReportsPage() {
                     </div>
                   )}
 
-                  {/* Actions */}
+                  {/* Actions (masquées en mode sélection) */}
+                  {!selectionMode && (
                   <div className="flex justify-between items-center pt-4 border-t border-gray-100">
                     <button
                       onClick={() => setSelectedReport(selectedReport?.id === report.id ? null : report)}
@@ -439,9 +456,10 @@ export default function ReportsPage() {
                       </div>
                     </div>
                   </div>
+                  )}
 
                   {/* Expanded Content - VERSION COMPLÈTEMENT AMÉLIORÉE */}
-                  {selectedReport?.id === report.id && (
+                  {!selectionMode && selectedReport?.id === report.id && (
                     <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
                       {/* Detailed Content */}
                       <div>
@@ -563,16 +581,16 @@ export default function ReportsPage() {
       </div>
 
       {/* Barre d'action de sélection */}
-      {selected.size > 0 && (
+      {selectionMode && (
         <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 pointer-events-none">
-          <div className="pointer-events-auto card px-4 py-3 flex items-center gap-3 shadow-xl toast-in">
+          <div className="pointer-events-auto card px-4 py-3 flex items-center gap-2 sm:gap-3 shadow-xl toast-in">
             <span className="text-sm font-medium text-slate-700 whitespace-nowrap">
               {selected.size} sélectionné{selected.size > 1 ? 's' : ''}
             </span>
-            <button onClick={selectAll} className="text-sm text-slate-500 hover:text-blue-700 whitespace-nowrap">Tout</button>
-            <button onClick={clearSelection} className="text-sm text-slate-500 hover:text-slate-700 whitespace-nowrap">Effacer</button>
-            <button onClick={exportSelection} disabled={exportingSelection} className="btn btn-primary px-4 py-2 text-sm whitespace-nowrap">
-              {exportingSelection ? 'Export…' : 'Exporter la sélection'}
+            <button onClick={selectAll} className="text-sm text-slate-500 hover:text-blue-700 whitespace-nowrap px-2 py-1">Tout</button>
+            <button onClick={exitSelection} className="text-sm text-slate-500 hover:text-slate-700 whitespace-nowrap px-2 py-1">Annuler</button>
+            <button onClick={exportSelection} disabled={exportingSelection || selected.size === 0} className="btn btn-primary px-4 py-2 text-sm whitespace-nowrap">
+              {exportingSelection ? 'Export…' : `Exporter${selected.size ? ` (${selected.size})` : ''}`}
             </button>
           </div>
         </div>
