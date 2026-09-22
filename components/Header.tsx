@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { purgeExpiredTrash } from '@/lib/trash';
+
+const TRASH_ICON = <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />;
 
 type NavItem = { href: string; label: string; icon: React.ReactNode };
 
@@ -41,7 +44,18 @@ export default function Header() {
   const pathname = usePathname();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      // Purge opportuniste de la corbeille, une fois par session de navigateur
+      if (data.session) {
+        try {
+          if (!sessionStorage.getItem('trash_purged')) {
+            sessionStorage.setItem('trash_purged', '1');
+            purgeExpiredTrash();
+          }
+        } catch { purgeExpiredTrash(); }
+      }
+    });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => subscription.unsubscribe();
   }, []);
@@ -87,6 +101,18 @@ export default function Header() {
                     {item.label}
                   </Link>
                 ))}
+                <Link
+                  href="/corbeille"
+                  title="Corbeille"
+                  aria-label="Corbeille"
+                  className={`inline-flex items-center p-2 rounded-lg transition-all duration-200 ${
+                    isActive('/corbeille')
+                      ? 'text-blue-700 bg-blue-50 ring-1 ring-blue-100'
+                      : 'text-slate-500 hover:text-blue-700 hover:bg-slate-100/70'
+                  }`}
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">{TRASH_ICON}</svg>
+                </Link>
                 <button
                   onClick={handleSignOut}
                   className="ml-1 inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
@@ -146,6 +172,18 @@ export default function Header() {
                       {item.label}
                     </Link>
                   ))}
+                  <Link
+                    href="/corbeille"
+                    onClick={() => setIsMenuOpen(false)}
+                    className={`inline-flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium transition-colors duration-200 ${
+                      isActive('/corbeille')
+                        ? 'text-blue-700 bg-blue-50'
+                        : 'text-slate-700 hover:text-blue-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">{TRASH_ICON}</svg>
+                    Corbeille
+                  </Link>
                   <button
                     onClick={handleSignOut}
                     className="inline-flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium text-slate-700 hover:text-red-600 hover:bg-red-50 transition-colors duration-200 text-left"

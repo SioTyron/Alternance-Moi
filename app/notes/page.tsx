@@ -87,6 +87,7 @@ export default function NotesPage() {
       const { data } = await supabase
         .from('formations')
         .select('id, name, school, level, academic_year')
+        .is('deleted_at', null)
         .order('created_at', { ascending: true });
 
       const list = (data as Formation[]) || [];
@@ -103,8 +104,8 @@ export default function NotesPage() {
 
   const loadFormationData = async (formationId: string, uid: string) => {
     const [semRes, ueRes] = await Promise.all([
-      supabase.from('semesters').select('id, formation_id, name, position').eq('formation_id', formationId).order('position', { ascending: true }),
-      supabase.from('ues').select('id, formation_id, semester_id, name, grades(id, ue_id, label, value, coefficient, created_at)').eq('formation_id', formationId).order('created_at', { ascending: true }),
+      supabase.from('semesters').select('id, formation_id, name, position').eq('formation_id', formationId).is('deleted_at', null).order('position', { ascending: true }),
+      supabase.from('ues').select('id, formation_id, semester_id, name, grades(id, ue_id, label, value, coefficient, created_at)').eq('formation_id', formationId).is('deleted_at', null).order('created_at', { ascending: true }),
     ]);
 
     let sems = (semRes.data as Semester[]) || [];
@@ -162,13 +163,13 @@ export default function NotesPage() {
     if (!selectedFormation) return;
     const ok = await confirm({
       title: 'Supprimer la formation',
-      message: `« ${selectedFormation.name} » et tous ses semestres, UE et notes seront supprimés définitivement.`,
+      message: `« ${selectedFormation.name} » et tout son contenu iront dans la corbeille (restaurable 30 jours).`,
       confirmLabel: 'Supprimer',
       danger: true,
     });
     if (!ok) return;
     setBusy(true);
-    await supabase.from('formations').delete().eq('id', selectedFormation.id);
+    await supabase.from('formations').update({ deleted_at: new Date().toISOString() }).eq('id', selectedFormation.id);
     const remaining = formations.filter((f) => f.id !== selectedFormation.id);
     setFormations(remaining);
     setEditingFormation(false);
@@ -179,7 +180,7 @@ export default function NotesPage() {
       setSemesters([]);
       setUes([]);
     }
-    toast.success('Formation supprimée');
+    toast.info('Formation déplacée dans la corbeille');
     setBusy(false);
   };
 
@@ -233,15 +234,15 @@ export default function NotesPage() {
     }
     const ok = await confirm({
       title: 'Supprimer le semestre',
-      message: 'Ce semestre, ses UE et toutes leurs notes seront supprimés.',
+      message: 'Ce semestre et ses UE iront dans la corbeille (restaurable 30 jours).',
       confirmLabel: 'Supprimer',
       danger: true,
     });
     if (!ok) return;
-    await supabase.from('semesters').delete().eq('id', semesterId);
+    await supabase.from('semesters').update({ deleted_at: new Date().toISOString() }).eq('id', semesterId);
     setSemesters((prev) => prev.filter((s) => s.id !== semesterId));
     setUes((prev) => prev.filter((u) => u.semester_id !== semesterId));
-    toast.success('Semestre supprimé');
+    toast.info('Semestre déplacé dans la corbeille');
   };
 
   // ---- UE ------------------------------------------------------------
@@ -267,14 +268,14 @@ export default function NotesPage() {
   const deleteUe = async (ueId: string) => {
     const ok = await confirm({
       title: "Supprimer l'UE",
-      message: 'Cette UE et toutes ses notes seront supprimées.',
+      message: 'Cette UE et ses notes iront dans la corbeille (restaurable 30 jours).',
       confirmLabel: 'Supprimer',
       danger: true,
     });
     if (!ok) return;
-    await supabase.from('ues').delete().eq('id', ueId);
+    await supabase.from('ues').update({ deleted_at: new Date().toISOString() }).eq('id', ueId);
     setUes((prev) => prev.filter((u) => u.id !== ueId));
-    toast.success('UE supprimée');
+    toast.info('UE déplacée dans la corbeille');
   };
 
   const startEditUe = (ue: UE) => {

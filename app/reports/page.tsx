@@ -30,6 +30,7 @@ export default function ReportsPage() {
       const { data } = await supabase
         .from('reports')
         .select('*')
+        .is('deleted_at', null)
         .order('date', { ascending: false });
 
       if (data) setReports(data);
@@ -168,33 +169,32 @@ export default function ReportsPage() {
   const handleDelete = async (reportId: string) => {
     const ok = await confirm({
       title: 'Supprimer le rapport',
-      message: 'Ce rapport et ses fichiers joints seront définitivement supprimés. Cette action est irréversible.',
+      message: 'Le rapport sera déplacé dans la corbeille. Vous pourrez le restaurer pendant 30 jours.',
       confirmLabel: 'Supprimer',
       danger: true,
     });
     if (!ok) return;
 
+    const report = reports.find(r => r.id === reportId);
     setDeletingId(reportId);
-    
     try {
-      // Supprimer les fichiers du stockage s'ils existent
-      const report = reports.find(r => r.id === reportId);
-      if (report?.attachments?.length > 0) {
-        const filesToDelete = report.attachments.map((file: any) => file.path);
-        await supabase.storage.from('reports').remove(filesToDelete);
-      }
-
-      // Supprimer le rapport de la base de données
       const { error } = await supabase
         .from('reports')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', reportId);
 
       if (error) throw error;
 
-      // Mettre à jour l'état local
-      setReports(reports.filter(report => report.id !== reportId));
-      toast.success('Rapport supprimé');
+      setReports(reports.filter(r => r.id !== reportId));
+      toast.info('Rapport déplacé dans la corbeille', {
+        action: {
+          label: 'Annuler',
+          onClick: async () => {
+            await supabase.from('reports').update({ deleted_at: null }).eq('id', reportId);
+            if (report) setReports(prev => [report, ...prev].sort((a, b) => (b.date || '').localeCompare(a.date || '')));
+          },
+        },
+      });
     } catch (error) {
       console.error('Error deleting report:', error);
       toast.error('Erreur lors de la suppression du rapport');
