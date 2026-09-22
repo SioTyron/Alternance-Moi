@@ -7,6 +7,9 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/Confirm';
 import EmptyState from '@/components/EmptyState';
 import Sparkline from '@/components/Sparkline';
+import { SortableItem } from '@/components/SortableItem';
+import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import {
   Formation,
   Semester,
@@ -59,6 +62,34 @@ export default function NotesPage() {
   const semesterAverage = (semesterId: string) => overallAverage(semUes(semesterId));
   const annual = annualAverage(semesters.map((s) => semesterAverage(s.id)));
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const onSemesterDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = semesters.findIndex((s) => s.id === active.id);
+    const newIndex = semesters.findIndex((s) => s.id === over.id);
+    const reordered = arrayMove(semesters, oldIndex, newIndex);
+    setSemesters(reordered);
+    Promise.all(reordered.map((s, i) => supabase.from('semesters').update({ position: i + 1 }).eq('id', s.id)));
+  };
+
+  const onUeDragEnd = (semesterId: string, event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const list = ues.filter((u) => u.semester_id === semesterId);
+    const oldIndex = list.findIndex((u) => u.id === active.id);
+    const newIndex = list.findIndex((u) => u.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(list, oldIndex, newIndex);
+    const others = ues.filter((u) => u.semester_id !== semesterId);
+    setUes([...others, ...reordered]);
+    Promise.all(reordered.map((u, i) => supabase.from('ues').update({ position: i + 1 }).eq('id', u.id)));
+  };
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem('notes_view') as ViewMode | null;
@@ -105,7 +136,7 @@ export default function NotesPage() {
   const loadFormationData = async (formationId: string, uid: string) => {
     const [semRes, ueRes] = await Promise.all([
       supabase.from('semesters').select('id, formation_id, name, position').eq('formation_id', formationId).is('deleted_at', null).order('position', { ascending: true }),
-      supabase.from('ues').select('id, formation_id, semester_id, name, grades(id, ue_id, label, value, coefficient, created_at)').eq('formation_id', formationId).is('deleted_at', null).order('created_at', { ascending: true }),
+      supabase.from('ues').select('id, formation_id, semester_id, name, grades(id, ue_id, label, value, coefficient, created_at)').eq('formation_id', formationId).is('deleted_at', null).order('position', { ascending: true }),
     ]);
 
     let sems = (semRes.data as Semester[]) || [];
@@ -253,9 +284,10 @@ export default function NotesPage() {
     e.preventDefault();
     const name = (newUeInputs[semesterId] || '').trim();
     if (!name || !selectedId) return;
+    const position = ues.filter((u) => u.semester_id === semesterId).length + 1;
     const { data } = await supabase
       .from('ues')
-      .insert({ formation_id: selectedId, semester_id: semesterId, user_id: userId, name })
+      .insert({ formation_id: selectedId, semester_id: semesterId, user_id: userId, name, position })
       .select('id, formation_id, semester_id, name')
       .single();
     if (data) {
@@ -474,83 +506,101 @@ export default function NotesPage() {
   );
 
   // ---- Vues (reçoivent la liste d'UE d'un semestre) -----------------
-  const renderCards = (list: UE[]) => (
-    <div className="space-y-4">
-      {list.map((ue) => (
-        <div key={ue.id} className="card p-6 animate-in">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white flex-shrink-0">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-              </div>
-              {editingUeId === ue.id ? ueNameForm(ue) : (
-                <div className="flex items-center gap-1.5">
-                  <h3 className="text-lg font-semibold text-slate-900">{ue.name}</h3>
-                  {ueEditBtn(ue)}
+  const renderCards = (list: UE[], semesterId: string) => (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onUeDragEnd(semesterId, e)}>
+      <SortableContext items={list.map((u) => u.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-4">
+          {list.map((ue) => (
+            <SortableItem key={ue.id} id={ue.id}>
+              {(handle) => (
+                <div className="card p-6 animate-in">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {handle}
+                      <div className="h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white flex-shrink-0">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                      </div>
+                      {editingUeId === ue.id ? ueNameForm(ue) : (
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <h3 className="text-lg font-semibold text-slate-900 truncate">{ue.name}</h3>
+                          {ueEditBtn(ue)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="text-right">
+                        <div className={`text-xl font-bold ${averageColor(ueAverage(ue.grades))}`}>{formatAverage(ueAverage(ue.grades))}</div>
+                        <div className="text-[11px] text-slate-400 -mt-0.5">moyenne UE</div>
+                      </div>
+                      {trashBtn(() => deleteUe(ue.id), "Supprimer l'UE")}
+                    </div>
+                  </div>
+                  {ue.grades.length >= 2 && (
+                    <div className="flex items-center justify-end gap-2 mb-3 -mt-1">
+                      <span className="text-[11px] uppercase tracking-wide text-slate-400">Évolution</span>
+                      {sparkline(ue)}
+                    </div>
+                  )}
+                  <div className="mb-4">{gradeChips(ue)}</div>
+                  <div className="pt-3 border-t border-slate-100">{addGradeForm(ue)}</div>
                 </div>
               )}
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right">
-                <div className={`text-xl font-bold ${averageColor(ueAverage(ue.grades))}`}>{formatAverage(ueAverage(ue.grades))}</div>
-                <div className="text-[11px] text-slate-400 -mt-0.5">moyenne UE</div>
-              </div>
-              {trashBtn(() => deleteUe(ue.id), "Supprimer l'UE")}
-            </div>
-          </div>
-          {ue.grades.length >= 2 && (
-            <div className="flex items-center justify-end gap-2 mb-3 -mt-1">
-              <span className="text-[11px] uppercase tracking-wide text-slate-400">Évolution</span>
-              {sparkline(ue)}
-            </div>
-          )}
-          <div className="mb-4">{gradeChips(ue)}</div>
-          <div className="pt-3 border-t border-slate-100">{addGradeForm(ue)}</div>
+            </SortableItem>
+          ))}
         </div>
-      ))}
-    </div>
+      </SortableContext>
+    </DndContext>
   );
 
-  const renderList = (list: UE[]) => (
-    <div className="card divide-y divide-slate-100 animate-in overflow-hidden">
-      {list.map((ue) => {
-        const avg = ueAverage(ue.grades);
-        const open = !!expanded[ue.id];
-        return (
-          <div key={ue.id}>
-            <div className="w-full flex items-center justify-between gap-3 px-5 py-4">
-              {editingUeId === ue.id ? (
-                <div className="flex-1 min-w-0">{ueNameForm(ue)}</div>
-              ) : (
-                <button onClick={() => toggleExpand(ue.id)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
-                  <svg className={`h-4 w-4 text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                  <span className="font-medium text-slate-900 truncate">{ue.name}</span>
-                  <span className="text-xs text-slate-400 flex-shrink-0">{ue.grades.length} note{ue.grades.length > 1 ? 's' : ''}</span>
-                </button>
-              )}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="hidden sm:block">{sparkline(ue, 72, 24)}</span>
-                {editingUeId !== ue.id && ueEditBtn(ue)}
-                <span className={`text-lg font-bold ${averageColor(avg)}`}>{formatAverage(avg)}</span>
-              </div>
-            </div>
-            {open && (
-              <div className="px-5 pb-5 space-y-4 bg-slate-50/50">
-                {ue.grades.length >= 2 && (
-                  <div className="flex items-center gap-2 pt-3">
-                    <span className="text-[11px] uppercase tracking-wide text-slate-400">Évolution</span>
-                    {sparkline(ue)}
+  const renderList = (list: UE[], semesterId: string) => (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => onUeDragEnd(semesterId, e)}>
+      <SortableContext items={list.map((u) => u.id)} strategy={verticalListSortingStrategy}>
+        <div className="card divide-y divide-slate-100 animate-in overflow-hidden">
+          {list.map((ue) => {
+            const avg = ueAverage(ue.grades);
+            const open = !!expanded[ue.id];
+            return (
+              <SortableItem key={ue.id} id={ue.id}>
+                {(handle) => (
+                  <div>
+                    <div className="w-full flex items-center justify-between gap-2 px-4 py-4">
+                      {handle}
+                      {editingUeId === ue.id ? (
+                        <div className="flex-1 min-w-0">{ueNameForm(ue)}</div>
+                      ) : (
+                        <button onClick={() => toggleExpand(ue.id)} className="flex items-center gap-2 min-w-0 flex-1 text-left">
+                          <svg className={`h-4 w-4 text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          <span className="font-medium text-slate-900 truncate">{ue.name}</span>
+                          <span className="text-xs text-slate-400 flex-shrink-0">{ue.grades.length} note{ue.grades.length > 1 ? 's' : ''}</span>
+                        </button>
+                      )}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="hidden sm:block">{sparkline(ue, 72, 24)}</span>
+                        {editingUeId !== ue.id && ueEditBtn(ue)}
+                        <span className={`text-lg font-bold ${averageColor(avg)}`}>{formatAverage(avg)}</span>
+                      </div>
+                    </div>
+                    {open && (
+                      <div className="px-5 pb-5 space-y-4 bg-slate-50/50">
+                        {ue.grades.length >= 2 && (
+                          <div className="flex items-center gap-2 pt-3">
+                            <span className="text-[11px] uppercase tracking-wide text-slate-400">Évolution</span>
+                            {sparkline(ue)}
+                          </div>
+                        )}
+                        {gradeChips(ue)}
+                        <div className="pt-3 border-t border-slate-100">{addGradeForm(ue)}</div>
+                        <button onClick={() => deleteUe(ue.id)} className="text-sm text-red-500 hover:text-red-600 font-medium">Supprimer l&apos;UE</button>
+                      </div>
+                    )}
                   </div>
                 )}
-                {gradeChips(ue)}
-                <div className="pt-3 border-t border-slate-100">{addGradeForm(ue)}</div>
-                <button onClick={() => deleteUe(ue.id)} className="text-sm text-red-500 hover:text-red-600 font-medium">Supprimer l&apos;UE</button>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
+              </SortableItem>
+            );
+          })}
+        </div>
+      </SortableContext>
+    </DndContext>
   );
 
   const renderTable = (list: UE[]) => (
@@ -608,11 +658,11 @@ export default function NotesPage() {
     </div>
   );
 
-  const renderSemesterUes = (list: UE[]) =>
+  const renderSemesterUes = (list: UE[], semesterId: string) =>
     list.length === 0
       ? <p className="text-sm text-slate-400 px-1 py-2">Aucune UE dans ce semestre.</p>
-      : viewMode === 'cards' ? renderCards(list)
-      : viewMode === 'list' ? renderList(list)
+      : viewMode === 'cards' ? renderCards(list, semesterId)
+      : viewMode === 'list' ? renderList(list, semesterId)
       : renderTable(list);
 
   const viewButtons: { mode: ViewMode; label: string; icon: React.ReactNode }[] = [
@@ -751,51 +801,60 @@ export default function NotesPage() {
               </div>
             )}
 
-            {/* Semestres */}
+            {/* Semestres (réordonnables) */}
             {selectedId && !showFormationForm && (
-              <>
-                {semesters.map((sem) => {
-                  const list = semUes(sem.id);
-                  const avg = semesterAverage(sem.id);
-                  return (
-                    <div key={sem.id} className="space-y-4">
-                      {/* En-tête de semestre */}
-                      <div className="flex items-center justify-between gap-3 pt-2">
-                        {editingSemesterId === sem.id ? (
-                          <form onSubmit={(e) => saveEditSemester(e, sem.id)} className="flex items-center gap-1.5">
-                            <input autoFocus required value={editSemesterName} onChange={(e) => setEditSemesterName(e.target.value)} className="px-2 py-1 border border-slate-300 rounded text-base font-semibold" />
-                            <button type="submit" className="text-green-600 hover:text-green-700 p-0.5" title="Enregistrer"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></button>
-                            <button type="button" onClick={() => setEditingSemesterId(null)} className="text-slate-400 hover:text-slate-600 p-0.5" title="Annuler"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
-                          </form>
-                        ) : (
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="inline-flex h-7 items-center rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold px-3 ring-1 ring-indigo-100">{sem.name}</span>
-                            <button onClick={() => startEditSemester(sem)} className="text-slate-300 hover:text-blue-600 p-0.5" title="Renommer le semestre"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
-                            <button onClick={() => deleteSemester(sem.id)} className="text-slate-300 hover:text-red-500 p-0.5" title="Supprimer le semestre"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onSemesterDragEnd}>
+                <SortableContext items={semesters.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+                  {semesters.map((sem) => {
+                    const list = semUes(sem.id);
+                    const avg = semesterAverage(sem.id);
+                    return (
+                      <SortableItem key={sem.id} id={sem.id}>
+                        {(handle) => (
+                          <div className="space-y-4">
+                            {/* En-tête de semestre */}
+                            <div className="flex items-center justify-between gap-3 pt-2">
+                              <div className="flex items-center gap-1 min-w-0">
+                                {semesters.length > 1 && handle}
+                                {editingSemesterId === sem.id ? (
+                                  <form onSubmit={(e) => saveEditSemester(e, sem.id)} className="flex items-center gap-1.5">
+                                    <input autoFocus required value={editSemesterName} onChange={(e) => setEditSemesterName(e.target.value)} className="px-2 py-1 border border-slate-300 rounded text-base font-semibold" />
+                                    <button type="submit" className="text-green-600 hover:text-green-700 p-0.5" title="Enregistrer"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg></button>
+                                    <button type="button" onClick={() => setEditingSemesterId(null)} className="text-slate-400 hover:text-slate-600 p-0.5" title="Annuler"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                                  </form>
+                                ) : (
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="inline-flex h-7 items-center rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold px-3 ring-1 ring-indigo-100">{sem.name}</span>
+                                    <button onClick={() => startEditSemester(sem)} className="text-slate-300 hover:text-blue-600 p-0.5" title="Renommer le semestre"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                                    <button onClick={() => deleteSemester(sem.id)} className="text-slate-300 hover:text-red-500 p-0.5" title="Supprimer le semestre"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <span className={`text-lg font-bold ${averageColor(avg)}`}>{formatAverage(avg)}</span>
+                                <span className="text-xs text-slate-400 ml-1">moy. semestre</span>
+                              </div>
+                            </div>
+
+                            {renderSemesterUes(list, sem.id)}
+
+                            {/* Ajout d'une UE dans ce semestre */}
+                            <form onSubmit={(e) => addUe(e, sem.id)} className="flex flex-wrap items-end gap-3">
+                              <div className="flex-1 min-w-[180px]">
+                                <input value={newUeInputs[sem.id] || ''} onChange={(e) => setNewUeInput(sem.id, e.target.value)} placeholder={`Nouvelle UE dans ${sem.name}`} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white" required />
+                              </div>
+                              <button type="submit" className="btn px-4 py-2.5 text-sm border border-slate-300 text-slate-700 hover:bg-slate-100">+ UE</button>
+                            </form>
                           </div>
                         )}
-                        <div className="text-right flex-shrink-0">
-                          <span className={`text-lg font-bold ${averageColor(avg)}`}>{formatAverage(avg)}</span>
-                          <span className="text-xs text-slate-400 ml-1">moy. semestre</span>
-                        </div>
-                      </div>
-
-                      {renderSemesterUes(list)}
-
-                      {/* Ajout d'une UE dans ce semestre */}
-                      <form onSubmit={(e) => addUe(e, sem.id)} className="flex flex-wrap items-end gap-3">
-                        <div className="flex-1 min-w-[180px]">
-                          <input value={newUeInputs[sem.id] || ''} onChange={(e) => setNewUeInput(sem.id, e.target.value)} placeholder={`Nouvelle UE dans ${sem.name}`} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white" required />
-                        </div>
-                        <button type="submit" className="btn px-4 py-2.5 text-sm border border-slate-300 text-slate-700 hover:bg-slate-100">+ UE</button>
-                      </form>
-                    </div>
-                  );
-                })}
+                      </SortableItem>
+                    );
+                  })}
+                </SortableContext>
 
                 {/* Ajout d'un semestre */}
-                <button onClick={addSemester} className="btn btn-primary w-full py-3">+ Ajouter un semestre</button>
-              </>
+                <button onClick={addSemester} className="btn btn-primary w-full py-3 mt-4">+ Ajouter un semestre</button>
+              </DndContext>
             )}
           </div>
         )}
